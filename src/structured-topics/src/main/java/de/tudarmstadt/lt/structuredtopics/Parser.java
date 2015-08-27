@@ -2,68 +2,25 @@ package de.tudarmstadt.lt.structuredtopics;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.PrintWriter;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 
-import com.google.common.base.Throwables;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
+import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
+
 public class Parser {
 
-	public void parse(String resource) {
-		System.out.println("reading");
-		Map<String, Map<Integer, List<String>>> clusters = readClusters(resource);
-		System.out.println("calculating sim");
-		try (PrintWriter out = new PrintWriter(new File("sim.txt"))) {
-			int count = 0;
-			Set<Entry<String, Map<Integer, List<String>>>> entrySet = clusters.entrySet();
-			for (Entry<String, Map<Integer, List<String>>> sense : entrySet) {
-				if (count++ % 10000 == 0) {
-					System.out.println(count + "/" + entrySet.size());
-				}
-				String senseName = sense.getKey();
-				for (Entry<Integer, List<String>> senseIdClusters : sense.getValue().entrySet()) {
-					Integer senseId = senseIdClusters.getKey();
-					for (String word : senseIdClusters.getValue()) {
-						Map<Integer, List<String>> possibleSensesForClusterWord = clusters.get(word);
-						if (possibleSensesForClusterWord == null) {
-							System.err.println("No cluster for word " + word + " ?");
-							continue;
-						}
-						for (Entry<Integer, List<String>> senseForWord : possibleSensesForClusterWord.entrySet()) {
-							Integer wordSenseId = senseForWord.getKey();
-							double similarity = computeSimilarity(senseIdClusters.getValue(), senseForWord.getValue());
-							if (similarity != 0)
-								out.println(senseName + "#" + senseId + "\t" + word + "#" + wordSenseId + "\t"
-										+ similarity);
-						}
-					}
-				}
-			}
-		} catch (FileNotFoundException e1) {
-			e1.printStackTrace();
-		}
-	}
+	private static final Logger LOG = LoggerFactory.getLogger(Parser.class);
 
-	private double computeSimilarity(List<String> clusterWords1, List<String> clusterWords2) {
-		List<String> common = new ArrayList<String>(clusterWords1);
-		common.retainAll(clusterWords2);
-		double commonWords = common.size();
-		return commonWords / (clusterWords1.size() + clusterWords2.size());
-	}
-
-	private Map<String, Map<Integer, List<String>>> readClusters(String resource) {
+	public Map<String, Map<Integer, List<String>>> readClusters(File input, InputMode mode) {
 		Map<String, Map<Integer, List<String>>> senseClusterWords = Maps.newHashMapWithExpectedSize(1000000);
 		int lineNumber = 1;
-		try (BufferedReader in = new BufferedReader(new FileReader(fromResource(resource)))) {
+		try (BufferedReader in = Utils.openReader(input, mode)) {
 			String line = null;
 			// skip first line
 			line = in.readLine();
@@ -75,42 +32,37 @@ public class Parser {
 				try {
 					senseId = Integer.valueOf(split[1]);
 				} catch (NumberFormatException e) {
-					System.err.println("Invalid line? " + lineNumber);
-					e.printStackTrace();
+					LOG.warn("Line {} seems to be invalid:\n'{}", lineNumber, line);
 					continue;
 				}
 				List<String> words = Lists.newArrayList();
 				for (String word : split[2].split("[,]\\s")) {
 					words.add(word);
 				}
-				if (!senseClusterWords.containsKey(sense)) {
-					// create new sense
-					Map<Integer, List<String>> clusters = Maps.newHashMap();
-					clusters.put(senseId, words);
-					senseClusterWords.put(sense, clusters);
-				} else {
-					// add to existing sense
-					Map<Integer, List<String>> clusters = senseClusterWords.get(sense);
-					clusters.put(senseId, words);
-				}
+				addSenseCluster(senseClusterWords, sense, senseId, words);
 				if (lineNumber % 10000 == 0) {
-					System.out.println(lineNumber);
+					LOG.info("Progess, line {}", lineNumber);
 				}
 			}
 		} catch (Exception e) {
-			throw new RuntimeException("Error in line: " + lineNumber, e);
+			LOG.error("Line {} seems to be invalid which caused an error", lineNumber, e);
 		}
 		return senseClusterWords;
 	}
 
-	private File fromResource(String resource) {
-		try {
-			return new File(getClass().getClassLoader().getResource(resource).toURI());
-		} catch (URISyntaxException e) {
-			Throwables.propagate(e);
-			// not reachable
-			return null;
+	private Map<Integer, List<String>> addSenseCluster(Map<String, Map<Integer, List<String>>> senseClusterWords,
+			String sense, Integer senseId, List<String> words) {
+		Map<Integer, List<String>> clusters = null;
+		if (senseClusterWords.containsKey(sense)) {
+			// add to existing sense
+			clusters = senseClusterWords.get(sense);
+		} else {
+			// create new sense
+			clusters = Maps.newHashMap();
+			senseClusterWords.put(sense, clusters);
 		}
+		clusters.put(senseId, words);
+		return clusters;
 	}
 
 }

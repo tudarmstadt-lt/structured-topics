@@ -5,31 +5,38 @@
 	<artifactId>structured-topics</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>structured-topics</name>
-
-	<plugins>
-		<plugin>
-			<groupId>org.apache.maven.plugins</groupId>
-			<artifactId>maven-jar-plugin</artifactId>
-			<configuration>
-				<archive>
-					<manifest>
-						<addClasspath>true</addClasspath>
-						<mainClass>de.tudarmstadt.lt.structuredtopics.Main</mainClass>
-					</manifest>
-				</archive>
-			</configuration>
-		</plugin>
-		<plugin>
-			<groupId>org.apache.maven.plugins</groupId>
-			<artifactId>maven-compiler-plugin</artifactId>
-			<configuration>
-				<source>1.8</source>
-				<target>1.8</target>
-			</configuration>
-		</plugin>
-	</plugins>
+	<properties>
+		<timestamp>${maven.build.timestamp}</timestamp>
+		<maven.build.timestamp.format>yyyy_MM_dd_HH_mm</maven.build.timestamp.format>
+	</properties>
+	<build>
+		<finalName>${project.artifactId}_${project.version}_${timestamp}</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<addClasspath>true</addClasspath>
+							<mainClass>de.tudarmstadt.lt.structuredtopics.Main</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 
 	<dependencies>
+		<!-- testing -->
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-all</artifactId>
@@ -42,14 +49,31 @@
 			<version>4.12</version>
 			<scope>test</scope>
 		</dependency>
-<dependency>
-	<groupId>com.google.guava</groupId>
-	<artifactId>guava</artifactId>
-	<version>18.0</version>
-</dependency>
+		<!-- logging -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.12</version>
+		</dependency>
+		<dependency>
+			<groupId>org.tinylog</groupId>
+			<artifactId>slf4j-binding</artifactId>
+			<version>1.0.1</version>
+		</dependency>
+		<!-- collections and stuff -->
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>18.0</version>
+		</dependency>
+		<!-- command line interface -->
+		<dependency>
+			<groupId>commons-cli</groupId>
+			<artifactId>commons-cli</artifactId>
+			<version>1.3.1</version>
+		</dependency>
 
 
 
 	</dependencies>
-
 </project>
