@@ -17,8 +17,8 @@ public class Parser {
 
 	private static final Logger LOG = LoggerFactory.getLogger(Parser.class);
 
-	public Map<String, Map<Integer, List<String>>> readClusters(File input, InputMode mode) {
-		Map<String, Map<Integer, List<String>>> senseClusterWords = Maps.newHashMapWithExpectedSize(1000000);
+	public Map<String, Map<Integer, List<Feature>>> readClusters(File input, InputMode mode) {
+		Map<String, Map<Integer, List<Feature>>> senseClusterWords = Maps.newHashMapWithExpectedSize(1000000);
 		int lineNumber = 1;
 		try (BufferedReader in = Utils.openReader(input, mode)) {
 			String line = null;
@@ -35,11 +35,15 @@ public class Parser {
 					LOG.warn("Line {} seems to be invalid:\n'{}", lineNumber, line);
 					continue;
 				}
-				List<String> words = Lists.newArrayList();
-				for (String word : split[2].split("[,]\\s")) {
-					words.add(word);
+				List<Feature> features = Lists.newArrayList();
+				String[] featuresRaw = split[2].split("[,]\\s");
+				for (int i = 0; i < featuresRaw.length; i++) {
+					// TODO read real weights (needs new data)
+					String word = featuresRaw[i];
+					double weight = featuresRaw.length - i;
+					features.add(new Feature(word, weight));
 				}
-				addSenseCluster(senseClusterWords, sense, senseId, words);
+				addSenseCluster(senseClusterWords, sense, senseId, features);
 				if (lineNumber % 10000 == 0) {
 					LOG.info("Progess, line {}", lineNumber);
 				}
@@ -50,9 +54,9 @@ public class Parser {
 		return senseClusterWords;
 	}
 
-	private Map<Integer, List<String>> addSenseCluster(Map<String, Map<Integer, List<String>>> senseClusterWords,
-			String sense, Integer senseId, List<String> words) {
-		Map<Integer, List<String>> clusters = null;
+	private Map<Integer, List<Feature>> addSenseCluster(Map<String, Map<Integer, List<Feature>>> senseClusterWords,
+			String sense, Integer senseId, List<Feature> words) {
+		Map<Integer, List<Feature>> clusters = null;
 		if (senseClusterWords.containsKey(sense)) {
 			// add to existing sense
 			clusters = senseClusterWords.get(sense);

@@ -39,7 +39,7 @@ public class Main {
 			InputMode inputMode = inputPath.endsWith(".gz") ? InputMode.GZ : InputMode.TXT;
 			File input = new File(inputPath);
 			if (!input.exists()) {
-				throw new FileNotFoundException("Input file not found");
+				throw new FileNotFoundException("Input file not found: " + input);
 			}
 			String outputPath = line.hasOption(OPTION_OUTPUT_FILE_NAME)
 					? (String) line.getParsedOptionValue(OPTION_OUTPUT_FILE_NAME) : null;
@@ -53,7 +53,7 @@ public class Main {
 			Stopwatch watch = Stopwatch.createStarted();
 			LOG.debug("Reading clusters");
 			Parser parser = new Parser();
-			Map<String, Map<Integer, List<String>>> clusters = parser.readClusters(input, inputMode);
+			Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(input, inputMode);
 			LOG.info("Calculating similarities");
 			SimilarityCalculator similarityCalculator = new SimilarityCalculator();
 			similarityCalculator.calculateSimilarities(clusters, output, debug);
