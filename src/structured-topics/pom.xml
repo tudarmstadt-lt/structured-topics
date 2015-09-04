@@ -10,7 +10,7 @@
 		<maven.build.timestamp.format>yyyy_MM_dd_HH_mm</maven.build.timestamp.format>
 	</properties>
 	<build>
-		<finalName>${project.artifactId}_${project.version}_${timestamp}</finalName>
+		<finalName>${project.artifactId}-${project.version}_${timestamp}</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -22,6 +22,21 @@
 							<mainClass>de.tudarmstadt.lt.structuredtopics.Main</mainClass>
 						</manifest>
 					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<finalName>${artifactId}-${version}_with_dependencies_${timestamp}</finalName>
 				</configuration>
 			</plugin>
 			<plugin>
