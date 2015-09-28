@@ -1,0 +1,5 @@
+word	cid	cluster	isas
+Foo#NP	0	Bar, Baz
+Bar#VP	0	Foo, Baz
+Bar#NP	1	Baz
+Baz#NP	0	Foo, Bar

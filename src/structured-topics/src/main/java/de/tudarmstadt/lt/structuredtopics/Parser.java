@@ -2,6 +2,7 @@ package de.tudarmstadt.lt.structuredtopics;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -67,6 +68,30 @@ public class Parser {
 		}
 		clusters.put(senseId, words);
 		return clusters;
+	}
+
+	public Map<String, Integer> readWordFrequencies(File input, InputMode mode) {
+		Map<String, Integer> frequencies = Maps.newHashMap();
+		String line = null;
+		try (BufferedReader in = Utils.openReader(input, mode)) {
+			in.readLine();// skip header
+			while ((line = in.readLine()) != null) {
+				String[] split = line.split("\\t");
+				if (split.length != 2) {
+					LOG.warn("Invalid line: {}", line);
+					continue;
+				}
+				if (frequencies.containsKey(split[0])) {
+					LOG.warn("Duplicate value: {}", split[0]);
+					frequencies.put(split[0], Integer.valueOf(split[1]) + frequencies.get(split[0]));
+				}
+				frequencies.put(split[0], Integer.valueOf(split[1]));
+			}
+
+		} catch (IOException e) {
+			LOG.error("Error in line: {}, {}", line, e);
+		}
+		return frequencies;
 	}
 
 }

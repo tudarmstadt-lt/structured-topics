@@ -72,12 +72,13 @@ public class SimilarityCalculator {
 			Integer wordSenseId = senseForWord.getKey();
 			List<Feature> clusterWords2 = senseForWord.getValue();
 			double similarity = computeSimilarity(clusterWords1, clusterWords2);
-			if (similarity != 0)
+			if (similarity != 0) {
 				out.append(senseName + "#" + senseId + "\t" + word + "#" + wordSenseId + "\t" + similarity);
-			if (debug) {
-				appendSimilarWords(out, clusterWords1, clusterWords2);
+				out.append("\n");
+				if (debug) {
+					appendSimilarWords(out, clusterWords1, clusterWords2);
+				}
 			}
-			out.append("/n");
 
 		}
 	}
@@ -86,10 +87,19 @@ public class SimilarityCalculator {
 			throws IOException {
 		out.append("\t");
 		for (Feature cw1 : clusterWords1) {
-			if (clusterWords2.contains(cw1)) {
+			if (containsFeatureWord(clusterWords2, cw1)) {
 				out.append(cw1.getWord()).append(", ");
 			}
 		}
+	}
+
+	private boolean containsFeatureWord(List<Feature> clusterWords, Feature cw) {
+		for (Feature f : clusterWords) {
+			if (f.getWord().equals(cw.getWord())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private double computeSimilarity(List<Feature> clusterWords1, List<Feature> clusterWords2) {
@@ -115,21 +125,4 @@ public class SimilarityCalculator {
 		}
 		return Math.sqrt(sum);
 	}
-
-	// private double computeSimilarity(List<Feature> clusterWords1,
-	// List<Feature> clusterWords2) {
-	//
-	// double commonWords = 0;
-	// for (int i = 0; i < clusterWords1.size(); i++) {
-	// String word = clusterWords1.get(i).getWord();
-	// // TODO weight words
-	// for (Feature f : clusterWords2) {
-	// if (f.getWord().equals(word)) {
-	// commonWords++;
-	// break;
-	// }
-	// }
-	// }
-	// return commonWords / (clusterWords1.size() + clusterWords2.size());
-	// }
 }
