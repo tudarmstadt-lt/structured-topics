@@ -43,12 +43,13 @@ public class ConverterTest {
 		assertTrue(senseClusterWordCounts.exists());
 
 		// each sense should sum up the frequencies of the cluster words
-		String expected = "Foo#NP#0	12\n" + "Bar#NP#1	7\n" + "Bar#VP#0	10\n" + "Baz#NP#0	8\n";
+		String expected = "Foo#NN#0	12\n" + "Bar#NN#0	10\n" + "Bar#NN#1	7\n" + "Baz#NN#0	8\n";
 		assertThat(readGzFile(senseCounts), is(expected));
 
 		// sense - cluster word frequency is assumed to be 10
-		String expected2 = "Foo#NP#0	Bar	10\n" + "Foo#NP#0	Baz	10\n" + "Bar#NP#1	Baz	10\n"
-				+ "Bar#VP#0	Foo	10\n" + "Bar#VP#0	Baz	10\n" + "Baz#NP#0	Foo	10\n" + "Baz#NP#0	Bar	10\n";
+		String expected2 = "Foo#NN#0	Bar#NN	10\n" + "Foo#NN#0	Baz#NN	10\n" + "Bar#NN#0	Foo#NN	10\n"
+				+ "Bar#NN#0	Baz#NN	10\n" + "Bar#NN#1	Baz#NN	10\n" + "Baz#NN#0	Foo#NN	10\n"
+				+ "Baz#NN#0	Bar#NN	10\n";
 		assertThat(readGzFile(senseClusterWordCounts), is(expected2));
 	}
 
