@@ -55,6 +55,7 @@ public class SenseSimilarityCalculator {
 			IndexWriterConfig config = new IndexWriterConfig(analyzer);
 			Parser parser = new Parser();
 			Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(senseClusters, InputMode.GZ);
+			Utils.filterClustersByPosTag(clusters);
 			int total = Utils.countSenses(clusters);
 			Stopwatch watch = Stopwatch.createStarted();
 			LOG.info("Starting indexing");

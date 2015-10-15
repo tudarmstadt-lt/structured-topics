@@ -6,7 +6,7 @@ JARS_BASEPATH="${BASEDIR}/jars"
 
 echo "Basedir: ${BASEDIR}"
 
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_06_19_34.jar"
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_15_19_02.jar"
 JAR_NSI="${JARS_BASEPATH}/noun-sense-induction_2.10-0.0.1.jar"
 JAR_CW="${JARS_BASEPATH}/chinese-whispers.jar"
 
@@ -88,63 +88,29 @@ fi
 
 
 
-# step 1: convert input data for noun sense induction
-DIR_STEP_1="${DIR_PIPELINE}/1_convert_for_nsi"
-sense_cluster_word_counts="${DIR_STEP_1}/senseClusterWordCounts.gz"
-sense_counts="${DIR_STEP_1}/senseCounts.gz"
-word_freq_cleared="${DIR_STEP_1}/word-freq-cleared.gz"
+# step 1: compute similarities
+DIR_STEP_1="${DIR_PIPELINE}/1_sense_similarities"
+sense_similarities="${DIR_STEP_1}/sense_similarities.csv"
 
 if [ "$continue_step" == "step1" ]
 then
 	mkdir ${DIR_STEP_1}
 	echo 'created '${DIR_STEP_1}
 
-	echo 'converting data for noun sense induction'
+	echo 'calculating sense similarities'
 	java -Xms4G -Xmx6G -cp ${JAR_ST} \
-	de.tudarmstadt.lt.structuredtopics.convert.WordFrequencyConverter \
+	de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
 	${input_ddt} \
-	${input_word_frequency} \
-	${DIR_STEP_1} &> ${DIR_STEP_1}'/log.txt'
+	${sense_similarities} &> ${DIR_STEP_1}'/log.txt'
 
-	echo 'output files available at '${sense_cluster_word_counts}' and '${sense_counts}
-
-	# clear word-freq-news (remove header, clear empty lines)
-	zcat ${input_word_frequency} | tail -n +2 | sed '/^$/d' | gzip > ${word_freq_cleared}
-	echo 'cleared word frequencies, saved to '${word_freq_cleared}
-	continue_step='step2'
-fi
-
-
-# step 2: perform noun sense induction
-DIR_STEP_2="${DIR_PIPELINE}/2_nsi"
-sim_pruned_all_parts=${DIR_STEP_2}/sim_pruned_all_parts_sorted
-
-if [ "$continue_step" == "step2" ]
-then
-	mkdir ${DIR_STEP_2}
-	echo 'created '${DIR_STEP_2}
-
-	echo 'executing noun-sense-induction'
-	eval ${SPARK_SUBMIT} \
-	--master local[3] \
-	--driver-memory 6g \
-	--class WordSimFromCounts \
-	${JAR_NSI}  \
-	${sense_cluster_word_counts} \
-	${sense_counts} \
-	${word_freq_cleared} \
-	${DIR_STEP_2} \
-	50 0.0 1 1 1 LMI 7 100 100 &> ${DIR_STEP_2}'/log.txt'
-
-	# aggregate results
-
-	cat ${DIR_STEP_2}/SimPruned/part-* | sort -k 1,1 > ${sim_pruned_all_parts}
-	echo 'aggregated results at '${sim_pruned_all_parts}
+	echo 'output file available at '${sense_similarities}
 	continue_step='step3'
 fi
 
+# TODO: Step 2 removed, cleanup
+
 # step 3: cluster similarities
-DIR_STEP_3="${DIR_PIPELINE}/3_clustering"
+DIR_STEP_3="${DIR_PIPELINE}/2_clustering"
 clustering_result=${DIR_STEP_3}/clusters.csv
 
 if [ "$continue_step" == "step3" ]
@@ -156,7 +122,7 @@ then
 	echo 'performing clustering'
 	java -Xms4G -Xmx6G -cp ${JAR_CW} \
 	de.tudarmstadt.lt.cw.global.CWGlobal \
-	-in ${sim_pruned_all_parts} \
+	-in ${sense_similarities} \
 	-N 100 \
 	-out ${clustering_result} &> ${DIR_STEP_3}'/log.txt'
 
@@ -165,7 +131,7 @@ then
 fi
 
 # step 4: build index
-DIR_STEP_4="${DIR_PIPELINE}/4_index"
+DIR_STEP_4="${DIR_PIPELINE}/3_index"
 
 if [ "$continue_step" == "step4" ]
 then
