@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -13,6 +12,8 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.util.List;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -37,22 +38,12 @@ public class Utils {
 		return new BufferedWriter(writer);
 	}
 
-	public static void main(String[] args) throws Exception {
-		String line = null;
+	public static int countSenses(Map<String, Map<Integer, List<Feature>>> clusters) {
 		int count = 0;
-		String feature = null;
-		int counts = 0;
-		try (BufferedReader in = new BufferedReader(
-				new FileReader(new File("/home/panic/Schreibtisch/Downloads/word-freq-news_no_head_no_blank")))) {
-			while ((line = in.readLine()) != null) {
-				count++;
-				String[] split = line.split("\t");
-				feature = split[0];
-				counts = Integer.parseInt(split[1]);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.err.println("line: " + count + " feature: " + feature + " counts: " + counts);
+		for (Map<Integer, List<Feature>> v : clusters.values()) {
+			count += v.size();
 		}
+		return count;
 	}
+
 }
