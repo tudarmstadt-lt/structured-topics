@@ -42,12 +42,16 @@ public class SenseSimilarityCalculator {
 	private static final Logger LOG = LoggerFactory.getLogger(SenseSimilarityCalculator.class);
 
 	/**
-	 * Arg1: ddt-file (gz). Arg2: output-file.
+	 * Arg1: ddt-file (gz). Arg2: output-file. Arg3: collect n most similar
+	 * senses per sense (must be an integer). Arg4: true|false -> binarize all
+	 * similarities to 1 if true
 	 * 
 	 */
 	public static void main(String[] args) {
 		File senseClusters = new File(args[0]);
 		File output = new File(args[1]);
+		int collectSimilarSensesPerSense = Integer.parseInt(args[2]);
+		boolean binarize = Boolean.valueOf(args[3]);
 
 		Analyzer analyzer = new KeywordAnalyzer();
 		try {
@@ -101,13 +105,16 @@ public class SenseSimilarityCalculator {
 								builder.add(new TermQuery(new Term("sense_cluster_word", word)), Occur.SHOULD);
 							}
 							BooleanQuery query = builder.build();
-							TopDocs result = searcher.search(query, 200);
+							TopDocs result = searcher.search(query, collectSimilarSensesPerSense);
 							for (ScoreDoc s : result.scoreDocs) {
 								String senseWordId2 = reader.document(s.doc).getField("sense_word_id").stringValue();
-								float score = s.score;
 								if (senseWordId1.equals(senseWordId2)) {
 									// ignore self-similarity
 									continue;
+								}
+								float score = s.score;
+								if (binarize) {
+									score = 1;
 								}
 								String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
 								synchronized (out) {
