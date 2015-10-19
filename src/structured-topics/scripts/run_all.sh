@@ -1,0 +1,55 @@
+#!/bin/bash
+
+INPUT_FOLDER=~/mt_pipeline/in
+
+ddts=( )
+ddts_label=( )
+
+ddts[0]="${INPUT_FOLDER}/ddt-news-n50-485k-closure.csv.gz"
+ddts_label[0]="n50-485k-closure"
+
+ddts[1]="${INPUT_FOLDER}/ddt-news-n200-345k-closure.csv.gz"
+ddts_label[1]="n200-345k-closure"
+
+ddts[2]="${INPUT_FOLDER}/senses-wiki-n30-1600k.csv.gz"
+ddts_label[2]="n30-1600k"
+
+ddts[3]="${INPUT_FOLDER}/senses-wiki-n200-380k.csv.gz" 
+ddts_label[3]="n200-380k"
+
+
+word_freqs=( )
+word_freqs_label=( )
+
+word_freqs[0]="${INPUT_FOLDER}/word-freq-news.gz"
+word_freqs_label[0]="wfn"
+
+similar_senses=()
+
+similar_senses[0]=5
+similar_senses[1]=10
+similar_senses[2]=25
+similar_senses[3]=50
+similar_senses[4]=100
+similar_senses[5]=150
+similar_senses[6]=200
+
+
+
+for i in "${!ddts[@]}"; do 
+  	ddt=${ddts[$i]}
+	ddt_label=${ddts_label[$i]}
+	for j in "${!word_freqs[@]}"; do
+		word_freq=${word_freqs[$j]}
+		word_freq_label=${word_freqs_label[$j]}
+		for k in "${!similar_senses[@]}"; do
+			similar_senses_value=${similar_senses[$k]}
+			folder_prefix="${ddt_label}_${word_freq_label}_${similar_senses_value}sim"
+			echo "running configuration $folder_prefix"
+			./run_pipeline.sh ${ddt} ${word_freq} ${similar_senses} false "${folder_prefix}_weighted"
+			./run_pipeline.sh ${ddt} ${word_freq} ${similar_senses} true "${folder_prefix}_bin"  
+		done
+	done
+done
+
+#/bin/bash ./run_pipeline.sh ~/mt_pipeline/in/senses-wiki-n30-1600k.csv.gz ~/mt_pipeline/in/word-freq-news.gz 50 false test_config

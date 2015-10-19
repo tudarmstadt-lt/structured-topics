@@ -3,10 +3,12 @@
 # Values for configuration (jar locations, base directory, ...)
 BASEDIR="$HOME/mt_pipeline"
 JARS_BASEPATH="${BASEDIR}/jars"
+RUN_JAVA=java
+JAVA_PARAMS='-Xms4G -Xmx6G'
 
 echo "Basedir: ${BASEDIR}"
 
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_15_19_02.jar"
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_19_13_24.jar"
 JAR_NSI="${JARS_BASEPATH}/noun-sense-induction_2.10-0.0.1.jar"
 JAR_CW="${JARS_BASEPATH}/chinese-whispers.jar"
 
@@ -39,7 +41,7 @@ else
 fi
 
 # parameters
-EXPECTED_RUN_PARAMETERS=2
+EXPECTED_RUN_PARAMETERS=5
 EXPECTED_CONTINUE_PARAMETERS=3
 # default value, if not in continue-mode
 continue_step='step0'
@@ -50,6 +52,9 @@ if [ $# -eq $EXPECTED_RUN_PARAMETERS ]
 then 	
 	input_ddt=$1
 	input_word_frequency=$2
+	similarSensesPerSense=$3
+	binarize=$4
+	output_prefix=$5
 	if [ -f ${input_ddt} ]
 	then
 	 	echo 'input_ddt: '${input_ddt}
@@ -72,7 +77,7 @@ then
 	echo 'continuing folder '$continue_folder' at step '$continue_step
 else
 	echo 'Missing parameters, given '$#' expected '$EXPECTED_RUN_PARAMETERS' or '$EXPECTED_CONTINUE_PARAMETERS
-	echo 'usage: run_pipeline ddt-file word-frequency-file(gz)'
+	echo 'usage: run_pipeline ddt-file(gz) word-frequency-file(gz) similarSensesPerSense(int) binarizeEdgeWeights(true|false) output_prefix(string)'
 	echo 'or: run_pipeline continue step1|step2|step3|step4 pipeline_result_folder'  
 	exit
 fi
@@ -80,7 +85,7 @@ fi
 # step 0: preparation
 if [ "$continue_step" == "step0" ]
 then
-	DIR_PIPELINE="${BASEDIR}/pipeline_$(date +%Y_%m_%d_%H_%M_%S)"
+	DIR_PIPELINE="${BASEDIR}/pipeline_${output_prefix}_$(date +%Y_%m_%d_%H_%M_%S)"
 	mkdir ${DIR_PIPELINE}
 	echo 'created '${DIR_PIPELINE}
 	continue_step='step1'
@@ -90,18 +95,24 @@ fi
 
 # step 1: compute similarities
 DIR_STEP_1="${DIR_PIPELINE}/1_sense_similarities"
-sense_similarities="${DIR_STEP_1}/sense_similarities.csv"
-
+sense_similarities="${DIR_STEP_1}/sense_similarities_sorted.csv"
+sense_similarities_tmp="${DIR_STEP_1}/sense_similarities.csv"
 if [ "$continue_step" == "step1" ]
 then
 	mkdir ${DIR_STEP_1}
 	echo 'created '${DIR_STEP_1}
 
 	echo 'calculating sense similarities'
-	java -Xms4G -Xmx6G -cp ${JAR_ST} \
+	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 	de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
 	${input_ddt} \
-	${sense_similarities} &> ${DIR_STEP_1}'/log.txt'
+	${sense_similarities_tmp} \
+	${similarSensesPerSense} \
+	${binarize} &> ${DIR_STEP_1}'/log.txt'
+	
+	echo 'sorting similarities'
+	sort -k 1,1 -k 3,3rn ${sense_similarities_tmp} > ${sense_similarities}
+	rm ${sense_similarities_tmp}	
 
 	echo 'output file available at '${sense_similarities}
 	continue_step='step3'
@@ -120,7 +131,7 @@ then
 
 
 	echo 'performing clustering'
-	java -Xms4G -Xmx6G -cp ${JAR_CW} \
+	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_CW} \
 	de.tudarmstadt.lt.cw.global.CWGlobal \
 	-in ${sense_similarities} \
 	-N 100 \
@@ -139,7 +150,7 @@ then
 	echo 'created '${DIR_STEP_4}
 
 	echo 'building search index'
-	java -Xms4G -Xmx6G -cp ${JAR_ST} \
+	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 	de.tudarmstadt.lt.structuredtopics.classify.Indexer \
 	${clustering_result} \
 	${DIR_STEP_4} &> ${DIR_STEP_4}'/log.txt'

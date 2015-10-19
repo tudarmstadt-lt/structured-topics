@@ -1,3 +1,3 @@
 #!/bin/bash
 
-rm -r pipeline_20*
+rm -r pipeline_*

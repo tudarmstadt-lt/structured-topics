@@ -2,8 +2,9 @@
 
 BASEDIR="$HOME/mt_pipeline"
 JARS_BASEPATH="${BASEDIR}/jars"
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_15_19_02.jar"
-
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_19_13_24.jar"
+RUN_JAVA=java
+JAVA_PARAMS='-Xms4G -Xmx6G'
 
 if [ $# -ne 2 ]
 then 
@@ -24,7 +25,7 @@ echo 'using index: '${index_dir}
 
 
 # execute search on index
-java -Xms4G -Xmx6G -cp ${JAR_ST} \
+${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 de.tudarmstadt.lt.structuredtopics.classify.Searcher \
 "${index_dir}" \
 "${clusters}" \
