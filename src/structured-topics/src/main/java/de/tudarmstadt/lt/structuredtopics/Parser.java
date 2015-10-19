@@ -42,7 +42,7 @@ public class Parser {
 					continue;
 				}
 				List<Feature> features = Lists.newArrayList();
-				String[] featuresRaw = columns[2].split("[,]\\s");
+				String[] featuresRaw = columns[2].split("[,]");
 				for (int i = 0; i < featuresRaw.length; i++) {
 					String[] wordWeight = featuresRaw[i].split(":");
 					String word;
@@ -58,10 +58,10 @@ public class Parser {
 						}
 					} else {
 						// no weights
-						word = featuresRaw[i];
+						word = featuresRaw[i].trim();
 						weight = featuresRaw.length - i;
-						features.add(new Feature(word, weight));
 					}
+					features.add(new Feature(word, weight));
 				}
 				addSenseCluster(senseClusterWords, sense, senseId, features);
 				if (lineNumber % 10000 == 0) {

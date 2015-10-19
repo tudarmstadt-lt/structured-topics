@@ -83,7 +83,7 @@ public class SenseSimilarityCalculator {
 					try {
 						w.addDocument(senseDocument);
 					} catch (Exception e) {
-						LOG.warn("Error while adding document for cluster {} to index {}.", count, senseDocument);
+						LOG.warn("Error while adding document for cluster {} to index {}.", count, senseDocument, e);
 					}
 				}
 				w.commit();
