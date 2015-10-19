@@ -80,7 +80,11 @@ public class SenseSimilarityCalculator {
 							senseDocument.add(new StringField("sense_cluster_word", word, Store.NO));
 						}
 					}
-					w.addDocument(senseDocument);
+					try {
+						w.addDocument(senseDocument);
+					} catch (Exception e) {
+						LOG.warn("Error while adding document for cluster {} to index {}.", count, senseDocument);
+					}
 				}
 				w.commit();
 			}
