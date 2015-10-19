@@ -19,6 +19,7 @@ public class Parser {
 	private static final Logger LOG = LoggerFactory.getLogger(Parser.class);
 
 	public Map<String, Map<Integer, List<Feature>>> readClusters(File input, InputMode mode) {
+		LOG.info("Reading clusters from {}", input.getAbsolutePath());
 		Map<String, Map<Integer, List<Feature>>> senseClusterWords = Maps.newHashMapWithExpectedSize(1000000);
 		int lineNumber = 1;
 		try (BufferedReader in = Utils.openReader(input, mode)) {
@@ -27,22 +28,40 @@ public class Parser {
 			line = in.readLine();
 			while ((line = in.readLine()) != null) {
 				lineNumber++;
-				String[] split = line.split("\\t");
-				String sense = split[0];
+				String[] columns = line.split("\\t");
+				if (columns.length < 3) {
+					LOG.warn("Line {} seems to be invalid (missing columns):\n'{}", lineNumber, line);
+					continue;
+				}
+				String sense = columns[0];
 				Integer senseId = null;
 				try {
-					senseId = Integer.valueOf(split[1]);
+					senseId = Integer.valueOf(columns[1]);
 				} catch (NumberFormatException e) {
-					LOG.warn("Line {} seems to be invalid:\n'{}", lineNumber, line);
+					LOG.warn("Line {} seems to be invalid (sense id number):\n'{}", lineNumber, line);
 					continue;
 				}
 				List<Feature> features = Lists.newArrayList();
-				String[] featuresRaw = split[2].split("[,]\\s");
+				String[] featuresRaw = columns[2].split("[,]\\s");
 				for (int i = 0; i < featuresRaw.length; i++) {
-					// TODO read real weights (needs new data)
-					String word = featuresRaw[i];
-					double weight = featuresRaw.length - i;
-					features.add(new Feature(word, weight));
+					String[] wordWeight = featuresRaw[i].split(":");
+					String word;
+					double weight;
+					if (wordWeight.length == 2) {
+						// weights separated by ':'
+						word = wordWeight[0];
+						try {
+							weight = Double.valueOf(wordWeight[1]);
+						} catch (NumberFormatException e) {
+							LOG.warn("Line {} seems to be invalid (feature weight):\n'{}", lineNumber, line);
+							weight = 1;
+						}
+					} else {
+						// no weights
+						word = featuresRaw[i];
+						weight = featuresRaw.length - i;
+						features.add(new Feature(word, weight));
+					}
 				}
 				addSenseCluster(senseClusterWords, sense, senseId, features);
 				if (lineNumber % 10000 == 0) {
