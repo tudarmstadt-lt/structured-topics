@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Values for configuration (jar locations, base directory, ...)
-BASEDIR="$HOME/mt_pipeline"
+BASEDIR="$HOME/pipeline"
 JARS_BASEPATH="${BASEDIR}/jars"
-RUN_JAVA=java
-JAVA_PARAMS='-Xms4G -Xmx6G'
+RUN_JAVA=~/jdk8/jdk1.8.0_60/bin/java
+JAVA_PARAMS='-Xms4G -Xmx10G'
 
 echo "Basedir: ${BASEDIR}"
 
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_19_13_24.jar"
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_26_16_45.jar"
 JAR_NSI="${JARS_BASEPATH}/noun-sense-induction_2.10-0.0.1.jar"
 JAR_CW="${JARS_BASEPATH}/chinese-whispers.jar"
 
@@ -50,7 +50,7 @@ continue_step='step0'
 echo 'validating parameters'
 if [ $# -eq $EXPECTED_RUN_PARAMETERS ]
 then 	
-	input_ddt=$1
+	input_sense_similarities=$1
 	input_word_frequency=$2
 	similarSensesPerSense=$3
 	binarize=$4
@@ -93,41 +93,34 @@ fi
 
 
 
-# step 1: compute similarities
+# step 1: prune similarities
 DIR_STEP_1="${DIR_PIPELINE}/1_sense_similarities"
-sense_similarities="${DIR_STEP_1}/sense_similarities_sorted.csv"
-sense_similarities_tmp="${DIR_STEP_1}/sense_similarities.csv"
+sense_similarities="${DIR_STEP_1}/sense_similarities_sorted_pruned.csv"
 if [ "$continue_step" == "step1" ]
 then
 	mkdir ${DIR_STEP_1}
 	echo 'created '${DIR_STEP_1}
 
-	echo 'calculating sense similarities'
+	echo 'pruning sense similarities'
 	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
-	de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
-	${input_ddt} \
-	${sense_similarities_tmp} \
+	de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
+	${input_sense_similarities} \
+	${sense_similarities} \
 	${similarSensesPerSense} \
-	${binarize} &> ${DIR_STEP_1}'/log.txt'
-	
-	echo 'sorting similarities'
-	sort -k 1,1 -k 3,3rn ${sense_similarities_tmp} > ${sense_similarities}
-	rm ${sense_similarities_tmp}	
+	${binarize} &> ${DIR_STEP_1}'/log.txt'	
 
 	echo 'output file available at '${sense_similarities}
 	continue_step='step3'
 fi
 
-# TODO: Step 2 removed, cleanup
-
-# step 3: cluster similarities
-DIR_STEP_3="${DIR_PIPELINE}/2_clustering"
-clustering_result=${DIR_STEP_3}/clusters.csv
+# step 2: cluster similarities
+DIR_STEP_2="${DIR_PIPELINE}/2_clustering"
+clustering_result=${DIR_STEP_2}/clusters.csv
 
 if [ "$continue_step" == "step3" ]
 then
-	mkdir ${DIR_STEP_3}
-	echo 'created '${DIR_STEP_3}
+	mkdir ${DIR_STEP_2}
+	echo 'created '${DIR_STEP_2}
 
 
 	echo 'performing clustering'
@@ -135,27 +128,27 @@ then
 	de.tudarmstadt.lt.cw.global.CWGlobal \
 	-in ${sense_similarities} \
 	-N 100 \
-	-out ${clustering_result} &> ${DIR_STEP_3}'/log.txt'
+	-out ${clustering_result} &> ${DIR_STEP_2}'/log.txt'
 
 	echo 'clustering results available at '${clustering_result}
 	continue_step='step4'
 fi
 
-# step 4: build index
-DIR_STEP_4="${DIR_PIPELINE}/3_index"
+# step 3: build index
+DIR_STEP_3="${DIR_PIPELINE}/3_index"
 
 if [ "$continue_step" == "step4" ]
 then
-	mkdir ${DIR_STEP_4}
-	echo 'created '${DIR_STEP_4}
+	mkdir ${DIR_STEP_3}
+	echo 'created '${DIR_STEP_3}
 
 	echo 'building search index'
 	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 	de.tudarmstadt.lt.structuredtopics.classify.Indexer \
 	${clustering_result} \
-	${DIR_STEP_4} &> ${DIR_STEP_4}'/log.txt'
+	${DIR_STEP_3} &> ${DIR_STEP_3}'/log.txt'
 	
-	echo 'index available at '${DIR_STEP_4}	
+	echo 'index available at '${DIR_STEP_3}	
 
 	continue_step='done'
 fi
