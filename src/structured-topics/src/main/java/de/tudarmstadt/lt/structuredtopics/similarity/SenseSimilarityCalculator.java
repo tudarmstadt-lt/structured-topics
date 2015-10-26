@@ -43,16 +43,13 @@ public class SenseSimilarityCalculator {
 
 	/**
 	 * Arg1: ddt-file (gz). Arg2: output-file. Arg3: collect n most similar
-	 * senses per sense (must be an integer). Arg4: true|false -> binarize all
-	 * similarities to 1 if true
+	 * senses per sense (must be an integer).
 	 * 
 	 */
 	public static void main(String[] args) {
 		File senseClusters = new File(args[0]);
 		File output = new File(args[1]);
 		int collectSimilarSensesPerSense = Integer.parseInt(args[2]);
-		boolean binarize = Boolean.valueOf(args[3]);
-
 		Analyzer analyzer = new KeywordAnalyzer();
 		try {
 			RAMDirectory index = new RAMDirectory();
@@ -117,9 +114,6 @@ public class SenseSimilarityCalculator {
 									continue;
 								}
 								float score = s.score;
-								if (binarize) {
-									score = 1;
-								}
 								String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
 								synchronized (out) {
 									out.write(similarity);

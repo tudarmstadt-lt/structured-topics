@@ -1,5 +1,0 @@
-word	cid	cluster	isas
-Foo#NN	0	Bar#NN, Baz#NN
-Bar#NN	0	Foo#NN, Baz#NN
-Bar#NN	1	Baz#NN
-Baz#NN	0	Foo#NN, Bar#NN

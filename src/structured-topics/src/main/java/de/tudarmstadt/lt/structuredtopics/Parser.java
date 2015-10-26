@@ -44,7 +44,14 @@ public class Parser {
 				List<Feature> features = Lists.newArrayList();
 				String[] featuresRaw = columns[2].split("[,]");
 				for (int i = 0; i < featuresRaw.length; i++) {
-					String[] wordWeight = featuresRaw[i].split(":");
+					String rawFeature = featuresRaw[i];
+					// weight is the last part, avoid splitting words containing
+					// '#'
+					int lastHash = rawFeature.lastIndexOf("#");
+					if (lastHash > -1) {
+						rawFeature = rawFeature.substring(lastHash, rawFeature.length());
+					}
+					String[] wordWeight = rawFeature.split(":");
 					String word;
 					double weight;
 					if (wordWeight.length == 2) {
@@ -58,7 +65,7 @@ public class Parser {
 						}
 					} else {
 						// no weights
-						word = featuresRaw[i].trim();
+						word = rawFeature.trim();
 						weight = featuresRaw.length - i;
 					}
 					features.add(new Feature(word, weight));
