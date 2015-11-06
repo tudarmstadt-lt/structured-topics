@@ -64,7 +64,7 @@ for i in "${!ddts[@]}"; do
 	${similar_senses[0]}  &> ${dir_temp_ddt_sim}'/log.txt'
 	
 	echo 'sorting similarities'
-	sort -k 1,1 -k 3,3rn ${sense_similarities_tmp} > ${sense_similarities}
+	sort -k1,1 -k3,3rg ${sense_similarities_tmp} > ${sense_similarities}
 	rm ${sense_similarities_tmp}	
 
 	echo 'output file available at '${sense_similarities}
