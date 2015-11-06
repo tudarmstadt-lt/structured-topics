@@ -56,14 +56,14 @@ public class Utils {
 		Set<String> keysToRemove = Sets.newHashSetWithExpectedSize(clusters.size());
 		for (Entry<String, Map<Integer, List<Feature>>> entry : clusters.entrySet()) {
 			String senseWord = entry.getKey();
-			boolean keep = false;
+			boolean keepSenseWord = false;
 			for (String posTag : POS_TAG_WHITELIST) {
 				if (senseWord.endsWith(posTag)) {
-					keep = true;
+					keepSenseWord = true;
 					break;
 				}
 			}
-			if (keep) {
+			if (keepSenseWord) {
 				// filter senses
 				Set<Integer> sensesToRemove = Sets.newHashSet();
 				Map<Integer, List<Feature>> senses = entry.getValue();
@@ -93,10 +93,9 @@ public class Utils {
 				}
 				// if all senses are empty, remove entire sense
 				if (senses.isEmpty()) {
-					keep = false;
+					keysToRemove.add(senseWord);
 				}
 			} else {
-				// sense will be removed
 				keysToRemove.add(senseWord);
 			}
 		}

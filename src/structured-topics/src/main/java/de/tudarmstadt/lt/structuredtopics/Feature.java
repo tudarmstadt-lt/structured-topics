@@ -55,4 +55,9 @@ public class Feature {
 			return false;
 		return true;
 	}
+
+	@Override
+	public String toString() {
+		return "Feature [word=" + word + ", weight=" + weight + "]";
+	}
 }

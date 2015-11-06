@@ -9,6 +9,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
@@ -28,49 +29,7 @@ public class Parser {
 			line = in.readLine();
 			while ((line = in.readLine()) != null) {
 				lineNumber++;
-				String[] columns = line.split("\\t");
-				if (columns.length < 3) {
-					LOG.warn("Line {} seems to be invalid (missing columns):\n'{}", lineNumber, line);
-					continue;
-				}
-				String sense = columns[0];
-				Integer senseId = null;
-				try {
-					senseId = Integer.valueOf(columns[1]);
-				} catch (NumberFormatException e) {
-					LOG.warn("Line {} seems to be invalid (sense id number):\n'{}", lineNumber, line);
-					continue;
-				}
-				List<Feature> features = Lists.newArrayList();
-				String[] featuresRaw = columns[2].split("[,]");
-				for (int i = 0; i < featuresRaw.length; i++) {
-					String rawFeature = featuresRaw[i];
-					// weight is the last part, avoid splitting words containing
-					// '#'
-					int lastHash = rawFeature.lastIndexOf("#");
-					if (lastHash > -1) {
-						rawFeature = rawFeature.substring(lastHash, rawFeature.length());
-					}
-					String[] wordWeight = rawFeature.split(":");
-					String word;
-					double weight;
-					if (wordWeight.length == 2) {
-						// weights separated by ':'
-						word = wordWeight[0];
-						try {
-							weight = Double.valueOf(wordWeight[1]);
-						} catch (NumberFormatException e) {
-							LOG.warn("Line {} seems to be invalid (feature weight):\n'{}", lineNumber, line);
-							weight = 1;
-						}
-					} else {
-						// no weights
-						word = rawFeature.trim();
-						weight = featuresRaw.length - i;
-					}
-					features.add(new Feature(word, weight));
-				}
-				addSenseCluster(senseClusterWords, sense, senseId, features);
+				addClusterFromLine(line, lineNumber, senseClusterWords);
 				if (lineNumber % 10000 == 0) {
 					LOG.info("Progess, line {}", lineNumber);
 				}
@@ -79,6 +38,60 @@ public class Parser {
 			LOG.error("Line {} seems to be invalid which caused an error", lineNumber, e);
 		}
 		return senseClusterWords;
+	}
+
+	@VisibleForTesting
+	protected void addClusterFromLine(String line, int lineNumber,
+			Map<String, Map<Integer, List<Feature>>> senseClusterWords) {
+		String[] columns = line.split("\\t");
+		if (columns.length < 3) {
+			LOG.warn("Line {} seems to be invalid (missing columns):\n'{}", lineNumber, line);
+			return;
+		}
+		String sense = columns[0];
+		Integer senseId = null;
+		try {
+			senseId = Integer.valueOf(columns[1]);
+		} catch (NumberFormatException e) {
+			LOG.warn("Line {} seems to be invalid (sense id number):\n'{}", lineNumber, line);
+			return;
+		}
+		List<Feature> features = Lists.newArrayList();
+		String[] featuresRaw = columns[2].split("[,]");
+		for (int i = 0; i < featuresRaw.length; i++) {
+			String rawFeature = featuresRaw[i];
+			// features have either the format
+			// 'word#posTag#index:weight' or 'word#posTag'
+			// weight is the last part, avoid splitting words containing
+			// '#'
+			int lastHash = rawFeature.lastIndexOf("#");
+			String word;
+			String weightString = "";
+			if (lastHash <= 0) {
+				LOG.warn("Missing hash in line {}", lineNumber);
+				continue;
+			}
+			// weight or postag
+			weightString = rawFeature.substring(lastHash, rawFeature.length());
+			String[] wordWeight = weightString.split(":");
+			double weight;
+			if (wordWeight.length == 2) {
+				word = rawFeature.substring(0, lastHash).trim();
+				try {
+					weight = Double.valueOf(wordWeight[1]);
+				} catch (NumberFormatException e) {
+					LOG.warn("Line {} seems to be invalid (feature weight):\n'{}", lineNumber, line);
+					weight = 1;
+				}
+			} else {
+				// no weights
+				// +1 -> avoid weight 0 for last word
+				weight = ((double) featuresRaw.length - i + 1) / (featuresRaw.length + 1);
+				word = rawFeature;
+			}
+			features.add(new Feature(word.trim(), weight));
+		}
+		addSenseCluster(senseClusterWords, sense, senseId, features);
 	}
 
 	private Map<Integer, List<Feature>> addSenseCluster(Map<String, Map<Integer, List<Feature>>> senseClusterWords,
