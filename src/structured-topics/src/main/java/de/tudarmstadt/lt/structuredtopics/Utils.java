@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -24,7 +26,44 @@ import com.google.common.collect.Sets;
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 
 public class Utils {
-	private static final Set<String> POS_TAG_WHITELIST = Sets.newHashSet("NN", "NP", "JJ");
+
+	private static interface Filter {
+		boolean filter(String word);
+	}
+
+	private static class PosTagFilter implements Filter {
+		private static final Set<String> POS_TAG_WHITELIST = Sets.newHashSet("NN", "NP", "JJ");
+
+		@Override
+		public boolean filter(String word) {
+			for (String tag : POS_TAG_WHITELIST) {
+				if (word.endsWith(tag)) {
+					return false;
+				}
+			}
+			return true;
+		}
+	}
+
+	private static class RegexFilter implements Filter {
+
+		private Matcher matcher;
+
+		public RegexFilter(String regex) {
+			this.matcher = Pattern.compile(regex).matcher("");
+		}
+
+		@Override
+		public boolean filter(String word) {
+			matcher.reset(word);
+			boolean filter = !matcher.matches();
+			if (filter) {
+				System.err.println(word);
+			}
+			return filter;
+		}
+
+	}
 
 	public static BufferedReader openReader(File input, InputMode mode) throws IOException {
 		InputStream in = new FileInputStream(input);
@@ -53,15 +92,20 @@ public class Utils {
 	}
 
 	public static void filterClustersByPosTag(Map<String, Map<Integer, List<Feature>>> clusters) {
+		filterClusters(clusters, new PosTagFilter());
+	}
+
+	public static void filterClustersByRegEx(Map<String, Map<Integer, List<Feature>>> clusters, String regex) {
+		filterClusters(clusters, new RegexFilter(regex));
+	}
+
+	private static void filterClusters(Map<String, Map<Integer, List<Feature>>> clusters, Filter filter) {
 		Set<String> keysToRemove = Sets.newHashSetWithExpectedSize(clusters.size());
 		for (Entry<String, Map<Integer, List<Feature>>> entry : clusters.entrySet()) {
 			String senseWord = entry.getKey();
 			boolean keepSenseWord = false;
-			for (String posTag : POS_TAG_WHITELIST) {
-				if (senseWord.endsWith(posTag)) {
-					keepSenseWord = true;
-					break;
-				}
+			if (!filter.filter(senseWord)) {
+				keepSenseWord = true;
 			}
 			if (keepSenseWord) {
 				// filter senses
@@ -73,11 +117,9 @@ public class Utils {
 					for (int i = features.size() - 1; i >= 0; i--) {
 						Feature feature = features.get(i);
 						boolean keepFeature = false;
-						for (String posTag : POS_TAG_WHITELIST) {
-							if (feature.getWord().endsWith(posTag)) {
-								keepFeature = true;
-								break;
-							}
+						if (!filter.filter(feature.getWord())) {
+							keepFeature = true;
+							break;
 						}
 						if (!keepFeature) {
 							features.remove(i);
@@ -101,6 +143,27 @@ public class Utils {
 		}
 		for (String s : keysToRemove) {
 			clusters.remove(s);
+		}
+	}
+
+	public static void writeClustersToFile(Map<String, Map<Integer, List<Feature>>> clusters, File out)
+			throws IOException {
+		try (BufferedWriter writer = openWriter(out)) {
+			for (Entry<String, Map<Integer, List<Feature>>> senseClusters : clusters.entrySet()) {
+				String senseWord = senseClusters.getKey();
+				for (Entry<Integer, List<Feature>> senseCluster : senseClusters.getValue().entrySet()) {
+					Integer senseId = senseCluster.getKey();
+					writer.write(senseWord);
+					writer.write("\t");
+					writer.write(senseId.toString());
+					writer.write("\t");
+					for (Feature f : senseCluster.getValue()) {
+						writer.write(f.getWord() + ":" + f.getWeight());
+						writer.write(", ");
+					}
+					writer.write("\n");
+				}
+			}
 		}
 	}
 
