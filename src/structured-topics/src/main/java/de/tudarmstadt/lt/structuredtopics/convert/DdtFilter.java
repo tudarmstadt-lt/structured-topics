@@ -11,6 +11,9 @@ import de.tudarmstadt.lt.structuredtopics.Parser;
 import de.tudarmstadt.lt.structuredtopics.Utils;
 
 public class DdtFilter {
+
+	public static final String WORD_REGEX = ".*[a-zA-Z]+.*";
+
 	public static void main(String[] args) {
 		File in = new File(args[0]);
 		File out = new File(args[1]);
@@ -21,7 +24,7 @@ public class DdtFilter {
 		Utils.filterClustersByPosTag(clusters);
 		System.out.println("Senses: " + Utils.countSenses(clusters));
 		System.out.println("filtering by regex");
-		Utils.filterClustersByRegEx(clusters, ".*[a-zA-Z]+.*");
+		Utils.filterClustersByRegEx(clusters, WORD_REGEX);
 		System.out.println("Senses: " + Utils.countSenses(clusters));
 		System.out.println("writing");
 		try {

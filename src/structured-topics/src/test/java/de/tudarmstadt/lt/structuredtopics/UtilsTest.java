@@ -3,7 +3,9 @@ package de.tudarmstadt.lt.structuredtopics;
 import static com.google.common.collect.Lists.newArrayList;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.collection.IsMapContaining.hasKey;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -12,7 +14,21 @@ import org.junit.Test;
 
 import com.google.common.collect.Maps;
 
+import de.tudarmstadt.lt.structuredtopics.convert.DdtFilter;
+
 public class UtilsTest {
+
+	@Test
+	public void testRegexFilter() {
+		String regex = DdtFilter.WORD_REGEX;
+		Utils.RegexFilter filter = new Utils.RegexFilter(regex);
+		assertTrue(filter.filter(". . ."));
+		assertTrue(filter.filter("23.4"));
+		assertTrue(filter.filter("!"));
+
+		assertFalse(filter.filter("c++"));
+		assertFalse(filter.filter("java"));
+	}
 
 	@Test
 	public void testPosTagFiltering() {

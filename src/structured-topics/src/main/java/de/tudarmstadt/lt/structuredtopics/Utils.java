@@ -31,7 +31,7 @@ public class Utils {
 		boolean filter(String word);
 	}
 
-	private static class PosTagFilter implements Filter {
+	protected static class PosTagFilter implements Filter {
 		private static final Set<String> POS_TAG_WHITELIST = Sets.newHashSet("NN", "NP", "JJ");
 
 		@Override
@@ -45,7 +45,7 @@ public class Utils {
 		}
 	}
 
-	private static class RegexFilter implements Filter {
+	protected static class RegexFilter implements Filter {
 
 		private Matcher matcher;
 
@@ -116,12 +116,7 @@ public class Utils {
 					List<Feature> features = senseEntry.getValue();
 					for (int i = features.size() - 1; i >= 0; i--) {
 						Feature feature = features.get(i);
-						boolean keepFeature = false;
-						if (!filter.filter(feature.getWord())) {
-							keepFeature = true;
-							break;
-						}
-						if (!keepFeature) {
+						if (filter.filter(feature.getWord())) {
 							features.remove(i);
 						}
 					}
