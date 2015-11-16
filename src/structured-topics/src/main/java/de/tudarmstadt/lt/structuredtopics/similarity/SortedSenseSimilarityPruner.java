@@ -19,7 +19,9 @@ public class SortedSenseSimilarityPruner {
 	 * the third column. arg 2: output-file (same format, but each sense
 	 * similarities will be pruned to the third parameter) arg 3: integer,
 	 * number of similar senses to keep for each sense. arg 4: true|false, if
-	 * true, all similarities are replaced with 1.0 (binarized)
+	 * true, all similarities are replaced with 1.0 (binarized) arg 5:
+	 * (otional): double value, if the similarity drops below this factor to the
+	 * top score, all further similar senses are pruned
 	 * 
 	 */
 	public static void main(String[] args) {
@@ -27,6 +29,10 @@ public class SortedSenseSimilarityPruner {
 		File output = new File(args[1]);
 		int sensesToKeep = Integer.parseInt(args[2]);
 		boolean binarize = Boolean.parseBoolean(args[3]);
+		double similarityThreshold = Double.MAX_VALUE;
+		if (args.length >= 5) {
+			similarityThreshold = Double.parseDouble(args[4]);
+		}
 		try (BufferedWriter out = new BufferedWriter(new FileWriter(output))) {
 			try (BufferedReader in = new BufferedReader(new FileReader(input))) {
 				String line = null;
@@ -35,14 +41,18 @@ public class SortedSenseSimilarityPruner {
 				while ((line = in.readLine()) != null) {
 					String[] split = line.split("\t");
 					String sense = split[0];
+					double topSimilarity = 0;
+					double currentSimilarity = Double.parseDouble(split[2]);
+					;
 					if (sense.equals(currentSense)) {
 						currentSenseCount++;
 					} else {
 						// new sense
 						currentSense = sense;
 						currentSenseCount = 0;
+						topSimilarity = currentSimilarity;
 					}
-					if (currentSenseCount < sensesToKeep) {
+					if (currentSenseCount < sensesToKeep && (topSimilarity / currentSimilarity) < similarityThreshold) {
 						if (binarize) {
 							out.write(split[0] + "\t" + split[1] + "\t" + "1.0");
 						} else {

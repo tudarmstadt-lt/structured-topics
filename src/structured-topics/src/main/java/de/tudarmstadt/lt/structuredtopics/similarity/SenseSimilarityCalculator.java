@@ -3,10 +3,10 @@ package de.tudarmstadt.lt.structuredtopics.similarity;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -88,6 +88,7 @@ public class SenseSimilarityCalculator {
 			watch = Stopwatch.createStarted();
 			IndexReader reader = DirectoryReader.open(index);
 			IndexSearcher searcher = new IndexSearcher(reader);
+			CountDownLatch latch = new CountDownLatch(clusters.entrySet().size());
 			try (BufferedWriter out = new BufferedWriter(new FileWriter(output))) {
 				AtomicInteger count = new AtomicInteger();
 				clusters.entrySet().parallelStream().forEach(cluster -> {
@@ -100,6 +101,7 @@ public class SenseSimilarityCalculator {
 							Integer senseId = sense.getKey();
 							String senseWordId1 = senseWord + "#" + senseId;
 							BooleanQuery.Builder builder = new BooleanQuery.Builder();
+							BooleanQuery.setMaxClauseCount(1000000);
 							for (Feature f : sense.getValue()) {
 								String word = f.getWord();
 								builder.add(new TermQuery(new Term("sense_cluster_word", word)), Occur.SHOULD);
@@ -120,15 +122,19 @@ public class SenseSimilarityCalculator {
 								}
 							}
 						}
-					} catch (IOException e) {
+					} catch (Exception e) {
 						LOG.error("Error", e);
+					} finally {
+						latch.countDown();
 					}
 				});
 
+				// don't close the stream before all work is done
+				latch.await();
+				LOG.info("Searching similarities took {}ms", watch.elapsed(TimeUnit.MILLISECONDS));
+				LOG.info("Done");
 			}
-			LOG.info("Searching similarities took {}ms", watch.elapsed(TimeUnit.MILLISECONDS));
-			LOG.info("Done");
-		} catch (IOException e) {
+		} catch (Exception e) {
 			LOG.error("Error", e);
 		}
 
