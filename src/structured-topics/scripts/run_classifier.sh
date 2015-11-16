@@ -2,7 +2,7 @@
 
 BASEDIR="$HOME/pipeline"
 JARS_BASEPATH="${BASEDIR}/jars"
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_26_16_45.jar"
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_11_13_13_46.jar"
 RUN_JAVA=~/jdk8/jdk1.8.0_60/bin/java
 JAVA_PARAMS='-Xms4G -Xmx10G'
 

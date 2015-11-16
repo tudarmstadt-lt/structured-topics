@@ -8,7 +8,7 @@ JAVA_PARAMS='-Xms4G -Xmx10G'
 
 echo "Basedir: ${BASEDIR}"
 
-JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_10_26_16_45.jar"
+JAR_ST="${JARS_BASEPATH}/structured-topics-0.0.1-SNAPSHOT_with_dependencies_2015_11_13_13_46.jar"
 JAR_NSI="${JARS_BASEPATH}/noun-sense-induction_2.10-0.0.1.jar"
 JAR_CW="${JARS_BASEPATH}/chinese-whispers.jar"
 
@@ -115,7 +115,8 @@ fi
 
 # step 2: cluster similarities
 DIR_STEP_2="${DIR_PIPELINE}/2_clustering"
-clustering_result=${DIR_STEP_2}/clusters.csv
+clustering_result="${DIR_STEP_2}/clusters.csv"
+clustering_result_tmp="${clustering_result}.tmp"
 
 if [ "$continue_step" == "step3" ]
 then
@@ -128,7 +129,10 @@ then
 	de.tudarmstadt.lt.cw.global.CWGlobal \
 	-in ${sense_similarities} \
 	-N 100 \
-	-out ${clustering_result} &> ${DIR_STEP_2}'/log.txt'
+	-out ${clustering_result_tmp} &> ${DIR_STEP_2}'/log.txt'
+
+	sort -k2,2rn ${clustering_result_tmp} > ${clustering_result}
+	rm ${clustering_result_tmp}
 
 	echo 'clustering results available at '${clustering_result}
 	continue_step='step4'
