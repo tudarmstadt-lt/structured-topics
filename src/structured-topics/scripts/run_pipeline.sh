@@ -42,19 +42,25 @@ fi
 
 # parameters
 EXPECTED_RUN_PARAMETERS=5
+EXPECTED_RUN_PARAMETERS_2=6
 EXPECTED_CONTINUE_PARAMETERS=3
 # default value, if not in continue-mode
 continue_step='step0'
 
 # validate parameters
 echo 'validating parameters'
-if [ $# -eq $EXPECTED_RUN_PARAMETERS ]
+if [ $# -eq $EXPECTED_RUN_PARAMETERS ] || [$# -eq $EXPECTED_RUN_PARAMETERS_2] ;
 then 	
 	input_sense_similarities=$1
 	input_word_frequency=$2
 	similarSensesPerSense=$3
 	binarize=$4
 	output_prefix=$5
+	if [[ ! -z "$6" ]]
+	then
+	prune_threshold=$6
+	fi
+	
 	if [ -f ${input_ddt} ]
 	then
 	 	echo 'input_ddt: '${input_ddt}
@@ -76,7 +82,7 @@ then
 	DIR_PIPELINE=${3%/}
 	echo 'continuing folder '$continue_folder' at step '$continue_step
 else
-	echo 'Missing parameters, given '$#' expected '$EXPECTED_RUN_PARAMETERS' or '$EXPECTED_CONTINUE_PARAMETERS
+	echo 'Missing parameters, given '$#' expected '$EXPECTED_RUN_PARAMETERS' or '$EXPECTED_RUN_PARAMETERS_2' or '$EXPECTED_CONTINUE_PARAMETERS
 	echo 'usage: run_pipeline ddt-file(gz) word-frequency-file(gz) similarSensesPerSense(int) binarizeEdgeWeights(true|false) output_prefix(string)'
 	echo 'or: run_pipeline continue step1|step2|step3|step4 pipeline_result_folder'  
 	exit
@@ -101,13 +107,24 @@ then
 	mkdir ${DIR_STEP_1}
 	echo 'created '${DIR_STEP_1}
 
-	echo 'pruning sense similarities'
-	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
-	de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
-	${input_sense_similarities} \
-	${sense_similarities} \
-	${similarSensesPerSense} \
-	${binarize} &> ${DIR_STEP_1}'/log.txt'	
+	if [[ ! -z "$prune_threshold" ]]
+	then
+	echo 'pruning sense similarities without threshold'
+		${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
+		de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
+		${input_sense_similarities} \
+		${sense_similarities} \
+		${similarSensesPerSense} \
+		${binarize} &> ${DIR_STEP_1}'/log.txt'
+	else
+	echo 'pruning sense similarities with threshold of '${$prune_threshold}
+		${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
+		de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
+		${input_sense_similarities} \
+		${sense_similarities} \
+		${similarSensesPerSense} \
+		${binarize} ${$prune_threshold} &> ${DIR_STEP_1}'/log.txt'
+	fi	
 
 	echo 'output file available at '${sense_similarities}
 	continue_step='step3'

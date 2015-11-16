@@ -41,30 +41,31 @@ similar_senses[5]=10
 similar_senses[6]=5
 
 
+dir_ddt_similarity="${BASEDIR}/similarities"
+mkdir ${dir_ddt_similarity}
+	echo 'created '${dir_ddt_similarity}
 
 for i in "${!ddts[@]}"; do 
   	ddt=${ddts[$i]}
 	ddt_label=${ddts_label[$i]}
 
-	dir_temp_ddt_sim="${BASEDIR}/similarities"
 
 	# ompute similarities with max pruning value for current ddt
 
-	sense_similarities="${dir_temp_ddt_sim}/sense_similarities_sorted.csv"
-	sense_similarities_tmp="${dir_temp_ddt_sim}/sense_similarities.csv"
+	sense_similarities="${dir_ddt_similarity}/${ddt_label}_sense_similarities_sorted.csv"
+	sense_similarities_tmp="${dir_ddt_similarity}/${ddt_label}_sense_similarities.csv"
 
-	mkdir ${dir_temp_ddt_sim}
-	echo 'created '${dir_temp_ddt_sim}
 
-	echo 'calculating sense similarities for '${ddt}
+	echo 'calculating sense similarities for '${ddt}' to '${sense_similarities}
 	${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 	de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
 	${ddt} \
 	${sense_similarities_tmp} \
-	${similar_senses[0]}  &>> ${dir_temp_ddt_sim}'/log.txt'
+	${similar_senses[0]}  &>> ${dir_ddt_similarity}'/log.txt'
 	
 	echo 'sorting similarities'
 	sort -k1,1 -k3,3rg ${sense_similarities_tmp} > ${sense_similarities}
+	rm ${sense_similarities_tmp}
 
 	echo 'output file available at '${sense_similarities}
 	continue_step='step3'
@@ -77,7 +78,8 @@ for i in "${!ddts[@]}"; do
 			similar_senses_value=${similar_senses[$k]}
 			folder_prefix="${ddt_label}_${word_freq_label}_${similar_senses_value}sim"
 			echo "running configuration $folder_prefix"
-			./run_pipeline.sh ${sense_similarities} ${word_freq} ${similar_senses} false "${folder_prefix}_weighted" 
+			./run_pipeline.sh ${sense_similarities} ${word_freq} ${similar_senses} false "${folder_prefix}_weighted"
+			./run_pipeline.sh ${sense_similarities} ${word_freq} ${similar_senses} false "${folder_prefix}_weighted_pruned" 3.0 
 		done
 	done
 
