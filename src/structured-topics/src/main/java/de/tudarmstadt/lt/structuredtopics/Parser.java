@@ -68,7 +68,8 @@ public class Parser {
 			String word;
 			String weightString = "";
 			if (lastHash <= 0) {
-				LOG.warn("Missing hash in line {}", lineNumber);
+				// too noise, use only for debugging purpose
+				// LOG.warn("Missing hash in line {}", lineNumber);
 				continue;
 			}
 			// weight or postag

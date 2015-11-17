@@ -2,7 +2,6 @@ package de.tudarmstadt.lt.structuredtopics.classify;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 
 import org.apache.lucene.analysis.Analyzer;
@@ -15,6 +14,9 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+
+import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
+import de.tudarmstadt.lt.structuredtopics.Utils;
 
 public class Indexer {
 	/**
@@ -30,7 +32,7 @@ public class Indexer {
 			Directory index = FSDirectory.open(indexDir.toPath());
 			IndexWriterConfig config = new IndexWriterConfig(analyzer);
 
-			try (BufferedReader in = new BufferedReader(new FileReader(senseClusters))) {
+			try (BufferedReader in = Utils.openReader(senseClusters, InputMode.GZ)) {
 				try (IndexWriter w = new IndexWriter(index, config)) {
 					String line = null;
 					int count = 0;

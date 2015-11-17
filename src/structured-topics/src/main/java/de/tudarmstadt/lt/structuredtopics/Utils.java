@@ -21,11 +21,16 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.Sets;
 
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 
 public class Utils {
+
+	private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
 
 	private static interface Filter {
 		boolean filter(String word);
@@ -55,11 +60,9 @@ public class Utils {
 
 		@Override
 		public boolean filter(String word) {
-			matcher.reset(word);
+			String withoutPosTag = word.substring(0, word.indexOf("#"));
+			matcher.reset(withoutPosTag);
 			boolean filter = !matcher.matches();
-			if (filter) {
-				System.err.println(word);
-			}
 			return filter;
 		}
 
@@ -75,7 +78,7 @@ public class Utils {
 		return new BufferedReader(reader);
 	}
 
-	public static BufferedWriter openWriter(File output) throws IOException {
+	public static BufferedWriter openGzipWriter(File output) throws IOException {
 		OutputStream out = new FileOutputStream(output);
 		out = new GZIPOutputStream(out);
 		// TODO if required, encoding should be passed here
@@ -92,15 +95,19 @@ public class Utils {
 	}
 
 	public static void filterClustersByPosTag(Map<String, Map<Integer, List<Feature>>> clusters) {
+		LOG.info("Filtering by POS-Tag");
 		filterClusters(clusters, new PosTagFilter());
 	}
 
 	public static void filterClustersByRegEx(Map<String, Map<Integer, List<Feature>>> clusters, String regex) {
+		LOG.info("Filtering by regex {}", regex);
 		filterClusters(clusters, new RegexFilter(regex));
 	}
 
 	private static void filterClusters(Map<String, Map<Integer, List<Feature>>> clusters, Filter filter) {
 		Set<String> keysToRemove = Sets.newHashSetWithExpectedSize(clusters.size());
+		int removedFeatures = 0;
+		int removedSenses = 0;
 		for (Entry<String, Map<Integer, List<Feature>>> entry : clusters.entrySet()) {
 			String senseWord = entry.getKey();
 			boolean keepSenseWord = false;
@@ -118,6 +125,7 @@ public class Utils {
 						Feature feature = features.get(i);
 						if (filter.filter(feature.getWord())) {
 							features.remove(i);
+							removedFeatures++;
 						}
 					}
 					// if no words left -> remove sense
@@ -127,6 +135,7 @@ public class Utils {
 				}
 				for (Integer i : sensesToRemove) {
 					senses.remove(i);
+					removedSenses++;
 				}
 				// if all senses are empty, remove entire sense
 				if (senses.isEmpty()) {
@@ -139,11 +148,12 @@ public class Utils {
 		for (String s : keysToRemove) {
 			clusters.remove(s);
 		}
+		LOG.info("Filtered {} features and {} entire senses", removedFeatures, removedSenses);
 	}
 
 	public static void writeClustersToFile(Map<String, Map<Integer, List<Feature>>> clusters, File out)
 			throws IOException {
-		try (BufferedWriter writer = openWriter(out)) {
+		try (BufferedWriter writer = openGzipWriter(out)) {
 			for (Entry<String, Map<Integer, List<Feature>>> senseClusters : clusters.entrySet()) {
 				String senseWord = senseClusters.getKey();
 				for (Entry<Integer, List<Feature>> senseCluster : senseClusters.getValue().entrySet()) {
@@ -153,7 +163,7 @@ public class Utils {
 					writer.write(senseId.toString());
 					writer.write("\t");
 					for (Feature f : senseCluster.getValue()) {
-						writer.write(f.getWord() + ":" + f.getWeight());
+						writer.write(f.getWord() + "#" + f.getWeight());
 						writer.write(", ");
 					}
 					writer.write("\n");

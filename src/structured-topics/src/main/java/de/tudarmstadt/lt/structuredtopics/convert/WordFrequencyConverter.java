@@ -44,7 +44,7 @@ public class WordFrequencyConverter {
 		int total = clusters.size();
 		int count = 0;
 		LOG.info("Starting conversion for senseClusterWordCounts");
-		try (BufferedWriter out = Utils.openWriter(senseClusterWordCounts)) {
+		try (BufferedWriter out = Utils.openGzipWriter(senseClusterWordCounts)) {
 			for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
 				if (count++ % 10000 == 0) {
 					LOG.info("Progress: {}/{}", count, total);
@@ -64,7 +64,7 @@ public class WordFrequencyConverter {
 		}
 		LOG.info("Starting conversion for featureCounts");
 		count = 0;
-		try (BufferedWriter out = Utils.openWriter(senseCounts)) {
+		try (BufferedWriter out = Utils.openGzipWriter(senseCounts)) {
 			for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
 				if (count++ % 10000 == 0) {
 					LOG.info("Progress: {}/{}", count, total);

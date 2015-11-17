@@ -2,7 +2,6 @@ package de.tudarmstadt.lt.structuredtopics.similarity;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -89,7 +88,7 @@ public class SenseSimilarityCalculator {
 			IndexReader reader = DirectoryReader.open(index);
 			IndexSearcher searcher = new IndexSearcher(reader);
 			CountDownLatch latch = new CountDownLatch(clusters.entrySet().size());
-			try (BufferedWriter out = new BufferedWriter(new FileWriter(output))) {
+			try (BufferedWriter out = Utils.openGzipWriter(output)) {
 				AtomicInteger count = new AtomicInteger();
 				clusters.entrySet().parallelStream().forEach(cluster -> {
 					try {

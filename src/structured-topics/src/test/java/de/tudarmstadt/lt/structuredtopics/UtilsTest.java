@@ -22,12 +22,12 @@ public class UtilsTest {
 	public void testRegexFilter() {
 		String regex = DdtFilter.WORD_REGEX;
 		Utils.RegexFilter filter = new Utils.RegexFilter(regex);
-		assertTrue(filter.filter(". . ."));
-		assertTrue(filter.filter("23.4"));
-		assertTrue(filter.filter("!"));
+		assertTrue(filter.filter(". . .#NP"));
+		assertTrue(filter.filter("23.4#JJ"));
+		assertTrue(filter.filter("!#VP"));
 
-		assertFalse(filter.filter("c++"));
-		assertFalse(filter.filter("java"));
+		assertFalse(filter.filter("c++#NN"));
+		assertFalse(filter.filter("java#NP"));
 	}
 
 	@Test

@@ -21,7 +21,7 @@ public class SimilarityCalculator {
 	private static final Logger LOG = LoggerFactory.getLogger(SimilarityCalculator.class);
 
 	public void calculateSimilarities(Map<String, Map<Integer, List<Feature>>> clusters, File output, boolean debug) {
-		try (BufferedWriter out = Utils.openWriter(output)) {
+		try (BufferedWriter out = Utils.openGzipWriter(output)) {
 			writeSimilarities(clusters, out, debug);
 		} catch (Exception e) {
 			Throwables.propagate(e);
