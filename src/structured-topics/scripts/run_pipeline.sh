@@ -49,8 +49,9 @@ continue_step='step0'
 
 # validate parameters
 echo 'validating parameters'
-if [ $# -eq $EXPECTED_RUN_PARAMETERS ] || [$# -eq $EXPECTED_RUN_PARAMETERS_2] ;
+if [[ $# -eq $EXPECTED_RUN_PARAMETERS ]] || [[ $# -eq $EXPECTED_RUN_PARAMETERS_2 ]] ;
 then 	
+	echo ''
 	input_sense_similarities=$1
 	input_word_frequency=$2
 	similarSensesPerSense=$3
@@ -117,13 +118,13 @@ then
 		${similarSensesPerSense} \
 		${binarize} &> ${DIR_STEP_1}'/log.txt'
 	else
-	echo 'pruning sense similarities with threshold of '${$prune_threshold}
+	echo 'pruning sense similarities with threshold of '${prune_threshold}
 		${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 		de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
 		${input_sense_similarities} \
 		${sense_similarities} \
 		${similarSensesPerSense} \
-		${binarize} ${$prune_threshold} &> ${DIR_STEP_1}'/log.txt'
+		${binarize} ${prune_threshold} &> ${DIR_STEP_1}'/log.txt'
 	fi	
 
 	echo 'output file available at '${sense_similarities}
@@ -132,8 +133,8 @@ fi
 
 # step 2: cluster similarities
 DIR_STEP_2="${DIR_PIPELINE}/2_clustering"
-clustering_result="${DIR_STEP_2}/clusters.csv"
-clustering_result_tmp="${clustering_result}.tmp"
+clustering_result="${DIR_STEP_2}/clusters.csv.gz"
+clustering_result_tmp="${clustering_result}.tmp.gz"
 
 if [ "$continue_step" == "step3" ]
 then
