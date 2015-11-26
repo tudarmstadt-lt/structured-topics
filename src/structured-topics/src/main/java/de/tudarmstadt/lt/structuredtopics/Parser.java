@@ -57,7 +57,7 @@ public class Parser {
 			return;
 		}
 		List<Feature> features = Lists.newArrayList();
-		String[] featuresRaw = columns[2].split("[,]");
+		String[] featuresRaw = columns[2].split(",\\s*");
 		for (int i = 0; i < featuresRaw.length; i++) {
 			String rawFeature = featuresRaw[i];
 			// features have either the format

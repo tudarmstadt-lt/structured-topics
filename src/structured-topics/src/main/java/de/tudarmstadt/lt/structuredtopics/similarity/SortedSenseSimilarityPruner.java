@@ -3,11 +3,12 @@ package de.tudarmstadt.lt.structuredtopics.similarity;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
+import de.tudarmstadt.lt.structuredtopics.Utils;
 
 public class SortedSenseSimilarityPruner {
 
@@ -33,34 +34,38 @@ public class SortedSenseSimilarityPruner {
 		if (args.length >= 5) {
 			similarityThreshold = Double.parseDouble(args[4]);
 		}
-		try (BufferedWriter out = new BufferedWriter(new FileWriter(output))) {
-			try (BufferedReader in = new BufferedReader(new FileReader(input))) {
+		try (BufferedWriter out = Utils.openGzipWriter(output)) {
+			try (BufferedReader in = Utils.openReader(input, InputMode.GZ)) {
 				String line = null;
 				String currentSense = "";
 				int currentSenseCount = 0;
 				while ((line = in.readLine()) != null) {
-					String[] split = line.split("\t");
-					String sense = split[0];
-					double topSimilarity = 0;
-					double currentSimilarity = Double.parseDouble(split[2]);
-					;
-					if (sense.equals(currentSense)) {
-						currentSenseCount++;
-					} else {
-						// new sense
-						currentSense = sense;
-						currentSenseCount = 0;
-						topSimilarity = currentSimilarity;
-					}
-					if (currentSenseCount < sensesToKeep && (topSimilarity / currentSimilarity) < similarityThreshold) {
-						if (binarize) {
-							out.write(split[0] + "\t" + split[1] + "\t" + "1.0");
+					try {
+						String[] split = line.split("\t");
+						String sense = split[0];
+						double topSimilarity = 0;
+						double currentSimilarity = Double.parseDouble(split[2]);
+						if (sense.equals(currentSense)) {
+							currentSenseCount++;
 						} else {
-							out.write(line);
+							// new sense
+							currentSense = sense;
+							currentSenseCount = 0;
+							topSimilarity = currentSimilarity;
 						}
-						out.write("\n");
-					} else {
-						// prune line
+						if (currentSenseCount < sensesToKeep
+								&& (topSimilarity / currentSimilarity) < similarityThreshold) {
+							if (binarize) {
+								out.write(split[0] + "\t" + split[1] + "\t" + "1.0");
+							} else {
+								out.write(line);
+							}
+							out.write("\n");
+						} else {
+							// prune line
+						}
+					} catch (Exception e) {
+						LOG.error("Error while pruning line {}", line, e);
 					}
 				}
 
