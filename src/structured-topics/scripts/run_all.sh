@@ -60,8 +60,8 @@ for i in "${!ddts[@]}"; do
 
 	# compute similarities with max pruning value for current ddt
 
-	sense_similarities="${dir_ddt_similarity}/${ddt_label}_sense_similarities_sorted.csv"
-	sense_similarities_tmp="${dir_ddt_similarity}/${ddt_label}_sense_similarities.csv"
+	sense_similarities="${dir_ddt_similarity}/${ddt_label}_sense_similarities_sorted.csv.gz"
+	sense_similarities_tmp="${dir_ddt_similarity}/${ddt_label}_sense_similarities.csv.gz"
 
 
 	echo 'calculating sense similarities for '${ddt}' to '${sense_similarities}
@@ -72,8 +72,8 @@ for i in "${!ddts[@]}"; do
 	${similar_senses[0]}  &>> ${dir_ddt_similarity}'/log.txt'
 	
 	echo 'sorting similarities'
-	sort -k1,1 -k3,3rg ${sense_similarities_tmp} > ${sense_similarities}
-	rm ${sense_similarities_tmp}
+	zcat ${sense_similarities_tmp} | sort -k1,1 -k3,3rg | gzip -9  > ${sense_similarities}
+	#rm ${sense_similarities_tmp}
 
 	echo 'output file available at '${sense_similarities}
 	continue_step='step3'

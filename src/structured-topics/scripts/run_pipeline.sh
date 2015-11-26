@@ -102,7 +102,7 @@ fi
 
 # step 1: prune similarities
 DIR_STEP_1="${DIR_PIPELINE}/1_sense_similarities"
-sense_similarities="${DIR_STEP_1}/sense_similarities_sorted_pruned.csv"
+sense_similarities="${DIR_STEP_1}/sense_similarities_sorted_pruned.csv.gz"
 if [ "$continue_step" == "step1" ]
 then
 	mkdir ${DIR_STEP_1}
@@ -118,7 +118,7 @@ then
 		${similarSensesPerSense} \
 		${binarize} &> ${DIR_STEP_1}'/log.txt'
 	else
-	echo 'pruning sense similarities with threshold of '${prune_threshold}
+	echo "pruning sense similarities with threshold of ${prune_threshold}"
 		${RUN_JAVA} ${JAVA_PARAMS} -cp ${JAR_ST} \
 		de.tudarmstadt.lt.structuredtopics.similarity.SortedSenseSimilarityPruner \
 		${input_sense_similarities} \
@@ -149,7 +149,7 @@ then
 	-N 100 \
 	-out ${clustering_result_tmp} &> ${DIR_STEP_2}'/log.txt'
 
-	sort -k2,2rn ${clustering_result_tmp} > ${clustering_result}
+	zcat ${clustering_result_tmp} | sort -k2,2rn | gzip -9 > ${clustering_result}
 	rm ${clustering_result_tmp}
 
 	echo 'clustering results available at '${clustering_result}
