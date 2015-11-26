@@ -4,10 +4,16 @@ public class Feature {
 
 	private String word;
 	private double weight;
+	private Integer senseId;
 
 	public Feature(String word, double weight) {
+		this(word, weight, null);
+	}
+
+	public Feature(String word, double weight, Integer senseId) {
 		this.word = word;
 		this.weight = weight;
+		this.setSenseId(senseId);
 	}
 
 	public String getWord() {
@@ -59,5 +65,13 @@ public class Feature {
 	@Override
 	public String toString() {
 		return "Feature [word=" + word + ", weight=" + weight + "]";
+	}
+
+	public Integer getSenseId() {
+		return senseId;
+	}
+
+	public void setSenseId(Integer senseId) {
+		this.senseId = senseId;
 	}
 }

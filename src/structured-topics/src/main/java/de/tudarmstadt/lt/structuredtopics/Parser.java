@@ -73,13 +73,15 @@ public class Parser {
 				continue;
 			}
 			// weight or postag
-			weightString = rawFeature.substring(lastHash, rawFeature.length());
-			String[] wordWeight = weightString.split(":");
+			weightString = rawFeature.substring(lastHash + 1, rawFeature.length());
+			String[] wordSenseIdWeight = weightString.split(":");
 			double weight;
-			if (wordWeight.length == 2) {
+			Integer wordSenseId = null;
+			if (wordSenseIdWeight.length == 2) {
 				word = rawFeature.substring(0, lastHash).trim();
 				try {
-					weight = Double.valueOf(wordWeight[1]);
+					wordSenseId = Integer.parseInt(wordSenseIdWeight[0]);
+					weight = Double.valueOf(wordSenseIdWeight[1]);
 				} catch (NumberFormatException e) {
 					LOG.warn("Line {} seems to be invalid (feature weight):\n'{}", lineNumber, line);
 					weight = 1;
@@ -90,7 +92,7 @@ public class Parser {
 				weight = ((double) featuresRaw.length - i + 1) / (featuresRaw.length + 1);
 				word = rawFeature;
 			}
-			features.add(new Feature(word.trim(), weight));
+			features.add(new Feature(word.trim(), weight, wordSenseId));
 		}
 		addSenseCluster(senseClusterWords, sense, senseId, features);
 	}
