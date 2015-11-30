@@ -52,7 +52,11 @@ public class SenseSimilarityCalculator {
 	private static final String OPTION_SIMILAR_SENSES = "N";
 	private static final String OPTION_OUT_FILE = "out";
 	private static final String OPTION_IN_FILE = "in";
+	private static final String OPTION_FILTER_POS_TAG = "filterpos";
+	private static final String OPTION_FILTER_REGEXG = "filterregex";
 	private static final Logger LOG = LoggerFactory.getLogger(SenseSimilarityCalculator.class);
+
+	public static final String WORD_REGEX = ".*[a-zA-Z]+.*";
 
 	public static void main(String[] args) {
 		Options options = createOptions();
@@ -62,6 +66,14 @@ public class SenseSimilarityCalculator {
 			File output = new File(line.getOptionValue(OPTION_OUT_FILE));
 			Parser parser = new Parser();
 			Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(senseClusters, InputMode.GZ);
+			if (line.hasOption(OPTION_FILTER_POS_TAG)) {
+				LOG.info("Filtering by pos-tag");
+				Utils.filterClustersByPosTag(clusters);
+			}
+			if (line.hasOption(OPTION_FILTER_REGEXG)) {
+				LOG.info("Filtering by regex");
+				Utils.filterClustersByRegEx(clusters, WORD_REGEX);
+			}
 			Analyzer analyzer = new KeywordAnalyzer();
 			IndexWriterConfig config = new IndexWriterConfig(analyzer);
 			int total = Utils.countSenses(clusters);
@@ -220,6 +232,14 @@ public class SenseSimilarityCalculator {
 						+ OPTION_SIMILAR_SENSES + " option is ignored in this case.")
 				.build();
 		options.addOption(allSimilarities);
+
+		Option filterPosTag = Option.builder(OPTION_FILTER_POS_TAG).argName("filter by pos-tag")
+				.desc("Filters all senses by pos-tag (NN, NP or JJ)").build();
+		options.addOption(filterPosTag);
+
+		Option filterRegex = Option.builder(OPTION_FILTER_REGEXG).argName("filter by regex")
+				.desc("Filters all senses by the regular expression " + WORD_REGEX).build();
+		options.addOption(filterRegex);
 		return options;
 	}
 }
