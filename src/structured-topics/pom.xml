@@ -51,6 +51,11 @@
 	</build>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.elasticsearch</groupId>
+			<artifactId>elasticsearch</artifactId>
+			<version>2.1.0</version>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.hamcrest</groupId>
@@ -108,7 +113,12 @@
 			<artifactId>lucene-queryparser</artifactId>
 			<version>5.3.1</version>
 		</dependency>
-
+		<!-- utility -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.4</version>
+		</dependency>
 
 
 	</dependencies>
