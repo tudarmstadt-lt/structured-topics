@@ -1,7 +1,5 @@
 package de.tudarmstadt.lt.structuredtopics.evaluate;
 
-import static org.apache.commons.lang3.StringUtils.defaultString;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -10,6 +8,7 @@ import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -28,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
@@ -44,7 +44,6 @@ public class Indexer {
 	private static final String OPTION_INPUT_LABELS = "labels";
 	private static final String OPTION_INDEX_DIR = "index";
 
-	public static final String CLUSTER_LABEL_NONE = "<no_label>";
 	private static final Logger LOG = LoggerFactory.getLogger(Indexer.class);
 
 	public static void main(String[] args) {
@@ -52,31 +51,14 @@ public class Indexer {
 		Node node = null;
 		try {
 			CommandLine cl = new DefaultParser().parse(options, args, true);
-			Builder settings = Settings.settingsBuilder().put("path.home", cl.getOptionValue(OPTION_INDEX_DIR));
-			node = NodeBuilder.nodeBuilder().clusterName("structured-topics-el").settings(settings).node();
 			File clusters = new File(cl.getOptionValue(OPTION_INPUT_CLUSTERS));
 			File clusterLabelsFile = new File(cl.getOptionValue(OPTION_INPUT_LABELS));
-			Map<Integer, String> clusterLabels = readClusterLabels(clusterLabelsFile);
+			Map<String, String> clusterLabels = readWordLabels(clusterLabelsFile);
+			Builder settings = Settings.settingsBuilder().put("path.home", cl.getOptionValue(OPTION_INDEX_DIR));
+			node = NodeBuilder.nodeBuilder().clusterName("structured-topics-el").settings(settings).node();
 			Client client = node.client();
 			client.admin().cluster().prepareHealth().setWaitForYellowStatus().execute().actionGet();
-			try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
-				String line = null;
-				while ((line = in.readLine()) != null) {
-					String[] split = line.split("\\t");
-					if (split.length != 3) {
-						LOG.error("Invalid cluster: {}", line);
-					}
-					Integer clusterId = Integer.valueOf(split[0]);
-					Integer clusterSize = Integer.valueOf(split[1]);
-					String[] clusterWords = split[2].split(",\\s*");
-					String label = defaultString(clusterLabels.get(clusterId), CLUSTER_LABEL_NONE);
-					IndexResponse response = client.prepareIndex(EL_INDEX, EL_INDEX_TYPE, clusterId.toString())
-							.setSource(XContentFactory.jsonBuilder().startObject().field(EL_FIELD_CLUSTER_LABEL, label)
-									.field(EL_FIELD_CLUSTER_WORDS, clusterWords).endObject())
-							.get();
-					LOG.info(response.toString());
-				}
-			}
+			buildIndex(clusters, clusterLabels, client);
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments: {}", e.getMessage());
 			StringWriter sw = new StringWriter();
@@ -93,23 +75,73 @@ public class Indexer {
 		}
 	}
 
-	private static Map<Integer, String> readClusterLabels(File clusterLabelsFile) {
-		Map<Integer, String> clusterLabels = Maps.newHashMap();
+	private static void buildIndex(File clusters, Map<String, String> wordLabels, Client client) throws IOException {
+		try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
+			String line = null;
+			while ((line = in.readLine()) != null) {
+				String[] split = line.split("\\t");
+				if (split.length != 3) {
+					LOG.error("Invalid cluster: {}", line);
+				}
+				Integer clusterId = Integer.valueOf(split[0]);
+				Integer clusterSize = Integer.valueOf(split[1]);
+				String lowerCase = split[2].toLowerCase();
+				String[] clusterWords = lowerCase.split(",\\s*");
+				String[] labels = getLabels(clusterWords, wordLabels);
+				removePostTagAndSenseId(clusterWords);
+				if (labels.length > 0) {
+					// clusters without labels are skipped
+					IndexResponse response = client.prepareIndex(EL_INDEX, EL_INDEX_TYPE)
+							.setSource(XContentFactory.jsonBuilder().startObject()
+									.field(EL_FIELD_CLUSTER_WORDS, clusterWords).field(EL_FIELD_CLUSTER_LABEL, labels)
+									.endObject())
+							.get();
+					LOG.info(response.toString());
+				}
+			}
+		}
+	}
+
+	private static String[] getLabels(String[] words, Map<String, String> wordLabels) {
+		Set<String> labels = Sets.newHashSet();
+		for (String word : words) {
+			String label = wordLabels.get(word);
+			if (label != null) {
+				labels.add(label);
+			}
+		}
+		return labels.toArray(new String[0]);
+	}
+
+	private static void removePostTagAndSenseId(String[] clusterWords) {
+		for (int i = 0; i < clusterWords.length; i++) {
+			String fullWord = clusterWords[i];
+			int firstHashIndex = fullWord.indexOf("#");
+			if (firstHashIndex != -1) {
+				String word = fullWord.substring(0, firstHashIndex);
+				clusterWords[i] = word;
+			}
+		}
+
+	}
+
+	private static Map<String, String> readWordLabels(File labelsFile) {
+		Map<String, String> wordLabels = Maps.newHashMap();
 		try {
-			List<String> lines = Files.readLines(clusterLabelsFile, Charset.defaultCharset());
+			List<String> lines = Files.readLines(labelsFile, Charset.defaultCharset());
 			for (String line : lines) {
-				String[] split = line.split("\t");
+				String[] split = line.toLowerCase().split("\t");
 				if (split.length < 2) {
 					continue;
 				}
-				Integer clusterId = Integer.valueOf(split[0]);
+				String word = split[0];
 				String label = split[1];
-				clusterLabels.put(clusterId, label);
+				wordLabels.put(word, label);
 			}
 		} catch (IOException e) {
-			LOG.error("Error while reading cluster labels", e);
+			LOG.error("Error while reading labels", e);
 		}
-		return clusterLabels;
+		return wordLabels;
 	}
 
 	private static Options createOptions() {
@@ -118,7 +150,8 @@ public class Indexer {
 				.desc("Input file containing the clusters, in .gz-format").hasArg().required().build();
 		options.addOption(inputClusters);
 		Option inputLabels = Option.builder(OPTION_INPUT_LABELS).argName("cluster labels")
-				.desc(".csv file, containing a cluster id and a label, separated by tab").hasArg().required().build();
+				.desc(".csv file, containing a word#postag#senseid, eg. java#NN#1 and any label, separated by tab")
+				.hasArg().required().build();
 		options.addOption(inputLabels);
 		Option indexDir = Option.builder(OPTION_INDEX_DIR).argName("index directory")
 				.desc("path to directory, where the elasticsearch-index will be created").hasArg().required().build();
