@@ -31,6 +31,11 @@ public class WordFrequencyConverter {
 		Parser parser = new Parser();
 		File input = new File(args[0]);
 		File wordFrequenciesFile = new File(args[1]);
+		File outputFolder = new File(args[2]);
+		if (!outputFolder.exists()) {
+			LOG.info("Output-folder not found, creating dir {}", outputFolder.getAbsolutePath());
+			outputFolder.mkdirs();
+		}
 		File senseClusterWordCounts = new File(args[2], "senseClusterWordCounts.gz");
 		File senseCounts = new File(args[2], "senseCounts.gz");
 		LOG.info("Input: {}\n Word-Freq: {}\n Output1: {}\n Output2: {}", input.getAbsolutePath(),
