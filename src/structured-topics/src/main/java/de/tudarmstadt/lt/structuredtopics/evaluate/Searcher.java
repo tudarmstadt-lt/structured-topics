@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -35,6 +36,8 @@ import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import com.google.common.collect.Sets;
 
 public class Searcher {
 
@@ -84,7 +87,9 @@ public class Searcher {
 				org.w3c.dom.Node item = elements.item(i);
 				if (item.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE) {
 					String nodeName = item.getNodeName();
-					if (nodeName.equals("NamedEntityInText")) {
+					boolean isNamedEntity = nodeName.equals("NamedEntityInText");
+					boolean istSimpleText = nodeName.equals("SimpleTextPart");
+					if (isNamedEntity || istSimpleText) {
 						String text = item.getTextContent().toLowerCase();
 						try {
 							String[] words = text.split("\\s++");
@@ -96,14 +101,25 @@ public class Searcher {
 										.setTypes(Indexer.EL_INDEX_TYPE).setSearchType(SearchType.QUERY_AND_FETCH)
 										.setQuery(query).setFrom(0).setSize(20).setExplain(true).execute().actionGet();
 								SearchHits hits = searchResponse.getHits();
-								out.write(word + "\t NE \t");
-								for (SearchHit hit : hits) {
-									GetResponse response = client
-											.prepareGet(Indexer.EL_INDEX, Indexer.EL_INDEX_TYPE, hit.getId())
-											.setFields(Indexer.EL_FIELD_CLUSTER_LABEL).execute().actionGet();
-									List<Object> labels = response.getField(Indexer.EL_FIELD_CLUSTER_LABEL).getValues();
-									for (Object label : labels)
+								if (isNamedEntity) {
+									out.write(word + "\t NE \t");
+									// search labels only for named entities
+									Set<String> labels = Sets.newHashSet();
+									for (SearchHit hit : hits) {
+										GetResponse response = client
+												.prepareGet(Indexer.EL_INDEX, Indexer.EL_INDEX_TYPE, hit.getId())
+												.setFields(Indexer.EL_FIELD_CLUSTER_LABEL).execute().actionGet();
+										List<Object> labelsResponse = response.getField(Indexer.EL_FIELD_CLUSTER_LABEL)
+												.getValues();
+										for (Object label : labelsResponse) {
+											labels.add((String) label);
+										}
+									}
+									for (Object label : labels) {
 										out.write(label + ", ");
+									}
+								} else {
+									out.write(word + "\t\t");
 								}
 								out.write("\n");
 							}

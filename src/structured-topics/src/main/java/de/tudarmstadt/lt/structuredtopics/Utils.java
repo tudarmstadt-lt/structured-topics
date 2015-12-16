@@ -163,7 +163,11 @@ public class Utils {
 					writer.write(senseId.toString());
 					writer.write("\t");
 					for (Feature f : senseCluster.getValue()) {
-						writer.write(f.getWord() + "#" + f.getWeight());
+						if (f.getSenseId() != null) {
+							writer.write(f.getWord() + "#" + f.getSenseId() + f.getWeight());
+						} else {
+							writer.write(f.getWord());
+						}
 						writer.write(", ");
 					}
 					writer.write("\n");
