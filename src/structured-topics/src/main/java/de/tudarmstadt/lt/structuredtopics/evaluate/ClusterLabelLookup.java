@@ -35,6 +35,7 @@ public class ClusterLabelLookup {
 
 	private static final Logger LOG = LoggerFactory.getLogger(ClusterLabelLookup.class);
 
+	// TODO first approach for automated labeling of clusters
 	public static void main(String[] args) {
 		Options options = createOptions();
 		try {
