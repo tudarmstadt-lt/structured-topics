@@ -23,13 +23,13 @@ All modules are contained in the same jar. As many of the computations work on l
 Expected Input: sense clusters, as .csv.gz file with the format:
 
 ```
-<word>#<pos-tag>	<sense id>	<word>#<pos-tag>#<sense id>:<weight>, <word>#<pos-tag>#<sense id>:<weight>, ...
+<word>#<pos-tag>\t<sense id>\t<word>#<pos-tag>#<sense id>:<weight>, <word>#<pos-tag>#<sense id>:<weight>, ...
 ```
 
 Output: Gzipped file, containing one similarity per line:
 
 ```
-<word>#<pos-tag>#<sense id>	<word>#<pos-tag>#<sense id>	<similarity>
+<word>#<pos-tag>#<sense id>\t<word>#<pos-tag>#<sense id>\t<similarity>
 ```
 
 Usage:
@@ -70,9 +70,10 @@ Parameters:
  
 ###Clustering
  
-The graph of similar senses can be clustered using the https://github.com/tudarmstadt-lt/chinese-whispers project.
+The graph of similar senses can be clustered using the <https://github.com/tudarmstadt-lt/chinese-whispers> project.
  
 Usage:
+
 ```
 java -cp chinese-whispers.jar de.tudarmstadt.lt.cw.global.CWGlobal -in similarities.csv.gz -N 1000 -out clusters.csv.gz
 ```
@@ -82,3 +83,31 @@ Parameters:
  - in --> The similarities
  - out --> The output file
  - N --> maximum number of Edges per Node (should be >= the N for the similarity calculation)
+ 
+###Cluster Labeling
+ 
+Further steps take labeled clusters as input. The label should be in the third column and may be empty:
+
+```
+<cluster-id>\t<cluster-size>\t<cluster-label>\t<cluster-node1>, <cluster-node2>, ... 
+```
+
+An elasticsearch index on the labeled clusters can be built using
+
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.evaluate.Indexer -clusters clusters.csv.gz -index /path/to/index/directory
+```
+
+A sample usage of the search index is the labeling of named entity data. The input may be one of the xml-files from <https://github.com/AKSW/n3-collection> and the index directory from the previous step.
+
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.evaluate.Searcher -index /path/to/index/directory -data data.xml -out result.csv
+```
+
+Each word of the data will be printed to a separate line and labeled if it was part of a named entity.
+The result will be in the format
+
+```
+<word>\t<tag>\ŧ<labels>
+```
+Where tag is empty or "NE" if the word is part of a named entity and labels is empty or a csv-list of all lables found in the search index for the given word.
