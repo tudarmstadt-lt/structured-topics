@@ -6,10 +6,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.URI;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,13 +20,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,12 +28,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 public class Crawler {
-	private String apiKey;
-	private static final String API = "babelnet.io/v2/";
-	private static final String API_GET_SYNSET = "getSynset";
-	private static final String API_GET_EDGES = "getEdges";
+	private CachingApi api;
+
 	private static final Logger LOG = LoggerFactory.getLogger(Crawler.class);
-	private static final int MS_BETWEEN_REQUEST = 500;
 
 	private static final String OPTION_API_KEY = "key";
 	private static final String OPTION_STARTING_SYNSET = "synsetStart";
@@ -52,15 +40,18 @@ public class Crawler {
 	private static final String OPTION_VISITED_SYNSETS_FILE = "visited";
 	private static final String OPTION_QUEUE = "queue";
 
-	public Crawler(String apiKey) {
-		this.apiKey = apiKey;
+	private static final String OPTION_API_CACHE = "apiCache";
+
+	public Crawler(File cacheLocation, String apiKey) {
+		this.api = new RetryCallCachingApi(cacheLocation, apiKey);
 	}
 
 	public static void main(String[] args) {
 		Options options = createOptions();
 		try {
 			CommandLine cl = new DefaultParser().parse(options, args, true);
-			Crawler crawler = new Crawler(cl.getOptionValue(OPTION_API_KEY));
+			File cacheLocation = new File(cl.getOptionValue(OPTION_API_CACHE));
+			Crawler crawler = new Crawler(cacheLocation, cl.getOptionValue(OPTION_API_KEY));
 			String startingSynset = cl.getOptionValue(OPTION_STARTING_SYNSET);
 			String domain = cl.getOptionValue(OPTION_DOMAIN);
 			int maxSteps = Integer.valueOf(cl.getOptionValue(OPTION_MAX_STEPS));
@@ -106,6 +97,9 @@ public class Crawler {
 				.desc("File where the remaining queue is stored after finishing, will be created if not exists")
 				.required().hasArg().build();
 		options.addOption(queue);
+		Option apiCache = Option.builder(OPTION_API_CACHE).argName("apiCache")
+				.desc("Folder where api calls will be cached").required().hasArg().build();
+		options.addOption(apiCache);
 		return options;
 	}
 
@@ -117,90 +111,68 @@ public class Crawler {
 		queue.add(startingSynsetId);
 		int step = 0;
 		int countFoundSenses = 0;
+		String currentSynsetId = null;
 		try (BufferedWriter out = new BufferedWriter(new FileWriter(outFile, true))) {
 			while (!queue.isEmpty() && step < maxSteps) {
 				Iterator<String> it = queue.iterator();
-				String currentSynset = it.next();
+				currentSynsetId = it.next();
 				it.remove();
-				if (!visitedSynsets.add(currentSynset)) {
-					LOG.info("Skipping {}, already visited", currentSynset);
+				if (!visitedSynsets.add(currentSynsetId)) {
+					LOG.info("Skipping {}, already visited", currentSynsetId);
 				} else {
 					// only count a step if a new synset will be expanded
 					step++;
-					try (CloseableHttpClient client = newClosableHttpClient()) {
-						// wait between requests
-						Thread.sleep(MS_BETWEEN_REQUEST);
-						URIBuilder getSynsetBuilder = new URIBuilder().setScheme("http").setHost(API)
-								.setPath(API_GET_SYNSET).addParameter("id", currentSynset).addParameter("key", apiKey);
-						URI getSynsetUri = getSynsetBuilder.build();
-						HttpGet get = new HttpGet(getSynsetUri);
-						get.addHeader("Accept-Encoding", "gzip");
-						HttpResponse response = client.execute(get);
-						if (response.getStatusLine().getStatusCode() == 400) {
-							LOG.error("Bad request: {}", response.toString());
-							continue;
-						}
-						Gson gson = new GsonBuilder().create();
-						String responseToString = responseToString(response);
-						LOG.info("Accessing {}\nresponse:\n{}", getSynsetUri.toString(),
-								StringUtils.abbreviate(responseToString, 500));
-						Map json = (Map) gson.fromJson(responseToString, Object.class);
-						Object message = json.get("message");
-						if (message instanceof String && ((String) message)
-								.contains("Your key is not valid or the daily requests limit has been reached")) {
-							LOG.warn("Key invalid or limit reached");
-							visitedSynsets.remove(currentSynset);
-							break;
-						}
-						String mainSense = (String) json.get("mainSense");
-						Map domains = (Map) json.get("domains");
-						if (!domains.containsKey(domain)) {
-							LOG.info("Skipping {} from synset {}, not in domain {}", mainSense, currentSynset, domain);
-						} else {
-							LOG.info("Adding {}", mainSense);
-							out.write(mainSense + "\n");
-							countFoundSenses++;
-							// found a sense from domain, expand synset
-							URIBuilder getEdgesBuilder = new URIBuilder().setScheme("http").setHost(API)
-									.setPath(API_GET_EDGES).addParameter("id", currentSynset)
-									.addParameter("key", apiKey);
-							URI getEdgesUri = getEdgesBuilder.build();
-							HttpGet get2 = new HttpGet(getEdgesUri);
-							get.addHeader("Accept-Encoding", "gzip");
-							HttpResponse response2 = client.execute(get2);
-							if (response2.getStatusLine().getStatusCode() == 400) {
-								LOG.error("Bad request: {}", response.toString());
-								continue;
-							}
-							List edgesJson = (List) gson.fromJson(responseToString(response2), Object.class);
-							for (Object edge : edgesJson) {
-								Map edgeData = (Map) edge;
-								String targetSynset = (String) edgeData.get("target");
-								String language = (String) edgeData.get("language");
-								// TODO all languages?
-								if (language.equals("EN")) {
-									queue.add(targetSynset);
-								}
-							}
-						}
+					LOG.info("Current synsetid: {}", currentSynsetId);
+					String synset = api.getSynset(currentSynsetId);
+					Gson gson = new GsonBuilder().create();
+					Map json = (Map) gson.fromJson(synset, Object.class);
+					String mainSense = (String) json.get("mainSense");
+					Map domains = (Map) json.get("domains");
+					if (!domains.containsKey(domain)) {
+						LOG.info("Skipping {} from synset {}, not in domain {}", mainSense, currentSynsetId, domain);
+					} else {
+						Object domainWeight = domains.get(domain);
+						String senseWeight = mainSense + "\t" + domainWeight + "\t" + currentSynsetId;
+						LOG.info("Adding {}", senseWeight);
+						out.write(senseWeight + "\n");
+						out.flush();
+						countFoundSenses++;
+						// found a sense from domain, expand synset
+						String edgesJson = api.getEdges(currentSynsetId);
 
-					} catch (Exception e) {
-						LOG.error("Error while crawling", e);
-						visitedSynsets.remove(currentSynset);
+						List edges = (List) gson.fromJson(edgesJson, Object.class);
+						for (Object edge : edges) {
+							Map edgeData = (Map) edge;
+							String targetSynset = (String) edgeData.get("target");
+							String language = (String) edgeData.get("language");
+							// TODO all languages?
+							if (language.equals("EN")) {
+								queue.add(targetSynset);
+							}
+						}
 					}
+
 				}
+				saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
 			}
 		} catch (Exception e) {
-			LOG.error("Error while crawling", e);
+			LOG.error("Error while crawling, {} will be visited again", currentSynsetId, e);
+			queue.add(currentSynsetId);
+			visitedSynsets.remove(currentSynsetId);
 		} finally {
-			LOG.info("Done crawling, found {} new senses", countFoundSenses);
-			LOG.info("Saving queue");
-			saveLines(queue, queueFile);
-			LOG.info("Saving visited synsets");
-			saveLines(visitedSynsets, visitedFile);
+			LOG.info("Done crawling, found {} new senses with {} calls to the api. Remaining queue size: {}",
+					countFoundSenses, api.getApiCallCount(), queue.size());
+			saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
 			LOG.info("Finished");
 		}
+	}
 
+	private void saveQueueAndVisited(File queueFile, File visitedFile, Set<String> visitedSynsets,
+			LinkedHashSet<String> queue) {
+		LOG.info("Saving queue");
+		saveLines(queue, queueFile);
+		LOG.info("Saving visited synsets");
+		saveLines(visitedSynsets, visitedFile);
 	}
 
 	private void saveLines(Set<String> set, File file) {
@@ -236,19 +208,4 @@ public class Crawler {
 		return set;
 	}
 
-	private static String responseToString(HttpResponse response) throws UnsupportedOperationException, IOException {
-		try (BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
-			StringBuffer resultString = new StringBuffer();
-			String line = null;
-			while ((line = rd.readLine()) != null) {
-				resultString.append(line);
-			}
-			return resultString.toString();
-		}
-	}
-
-	private static CloseableHttpClient newClosableHttpClient() {
-		return HttpClientBuilder.create().setDefaultRequestConfig(
-				RequestConfig.custom().setConnectTimeout(10000).setSocketTimeout(10000).build()).build();
-	}
 }
