@@ -1,9 +1,7 @@
 package de.tudarmstadt.lt.structuredtopics.babelnet;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -28,6 +26,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
+import de.tudarmstadt.lt.structuredtopics.Utils;
 
 public class Crawler {
 	private CachingApi api;
@@ -110,8 +110,8 @@ public class Crawler {
 	@SuppressWarnings("rawtypes")
 	private void crawl(String startingSynsetId, String domain, int maxSteps, File outFile, File queueFile,
 			File visitedFile) {
-		Set<String> visitedSynsets = loadLines(visitedFile);
-		LinkedHashSet<String> queue = Sets.newLinkedHashSet(loadLines(queueFile));
+		Set<String> visitedSynsets = Utils.loadUniqueLines(visitedFile);
+		LinkedHashSet<String> queue = Sets.newLinkedHashSet(Utils.loadUniqueLines(queueFile));
 		queue.add(startingSynsetId);
 		int step = 0;
 		int countFoundSenses = 0;
@@ -202,24 +202,6 @@ public class Crawler {
 		} catch (IOException e) {
 			LOG.error("Error while saving", e);
 		}
-	}
-
-	private Set<String> loadLines(File file) {
-		Set<String> set = Sets.newHashSet();
-		if (file.exists()) {
-			try (BufferedReader in = new BufferedReader(new FileReader(file))) {
-				String line = null;
-				while ((line = in.readLine()) != null) {
-					set.add(line);
-				}
-			} catch (Exception e) {
-				LOG.error("Error while reading {}", file, e);
-			}
-			LOG.info("Loaded {} lines from {}", set.size(), file.getAbsolutePath());
-		} else {
-			LOG.info("{} does not exist, using empty set", file.getAbsolutePath());
-		}
-		return set;
 	}
 
 }

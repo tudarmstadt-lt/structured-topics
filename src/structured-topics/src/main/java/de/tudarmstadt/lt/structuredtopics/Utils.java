@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -174,6 +175,24 @@ public class Utils {
 				}
 			}
 		}
+	}
+
+	public static Set<String> loadUniqueLines(File file) {
+		Set<String> set = Sets.newHashSet();
+		if (file.exists()) {
+			try (BufferedReader in = new BufferedReader(new FileReader(file))) {
+				String line = null;
+				while ((line = in.readLine()) != null) {
+					set.add(line);
+				}
+			} catch (Exception e) {
+				LOG.error("Error while reading {}", file, e);
+			}
+			LOG.info("Loaded {} lines from {}", set.size(), file.getAbsolutePath());
+		} else {
+			LOG.info("{} does not exist, using empty set", file.getAbsolutePath());
+		}
+		return set;
 	}
 
 }
