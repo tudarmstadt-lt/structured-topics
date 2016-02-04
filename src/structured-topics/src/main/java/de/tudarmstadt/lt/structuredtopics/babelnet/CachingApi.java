@@ -69,8 +69,12 @@ public class CachingApi {
 		File cachedResult = new File(cacheLocation, synsetId.replace(":", "_") + ".json");
 		LOG.info("Reading synset {}", synsetId);
 		if (cachedResult.exists()) {
-			LOG.info("Found in cache");
-			return Files.toString(cachedResult, UTF_8);
+			LOG.info("Synstet {} Found in cache: {}", synsetId, cachedResult.getAbsolutePath());
+			String result = Files.toString(cachedResult, UTF_8);
+			if (StringUtils.isEmpty(result)) {
+				LOG.error("Empty result in file {}, deleting file from cache", cachedResult.getAbsolutePath());
+			}
+			return result;
 		} else {
 			LOG.info("Not in cache, calling api");
 			Map<String, String> parameters = Maps.newHashMap();

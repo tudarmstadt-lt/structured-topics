@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -20,6 +21,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +31,7 @@ import com.google.gson.GsonBuilder;
 
 public class Crawler {
 	private CachingApi api;
+	private long lastTimeSaved = 0;
 
 	private static final Logger LOG = LoggerFactory.getLogger(Crawler.class);
 
@@ -41,6 +44,7 @@ public class Crawler {
 	private static final String OPTION_QUEUE = "queue";
 
 	private static final String OPTION_API_CACHE = "apiCache";
+	private static final long SAVE_EACH_MS = TimeUnit.SECONDS.toMillis(30);
 
 	public Crawler(File cacheLocation, String apiKey) {
 		this.api = new RetryCallCachingApi(cacheLocation, apiKey);
@@ -124,6 +128,12 @@ public class Crawler {
 					step++;
 					LOG.info("Current synsetid: {}", currentSynsetId);
 					String synset = api.getSynset(currentSynsetId);
+					if (StringUtils.isEmpty(synset)) {
+						LOG.error("Empty response from api for synset {}, putting it at end of queue", currentSynsetId);
+						visitedSynsets.remove(currentSynsetId);
+						queue.add(currentSynsetId);
+						continue;
+					}
 					Gson gson = new GsonBuilder().create();
 					Map json = (Map) gson.fromJson(synset, Object.class);
 					String mainSense = (String) json.get("mainSense");
@@ -153,10 +163,14 @@ public class Crawler {
 					}
 
 				}
-				saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
+				if (System.currentTimeMillis() - lastTimeSaved > SAVE_EACH_MS) {
+					saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
+					lastTimeSaved = System.currentTimeMillis();
+				}
 			}
 		} catch (Exception e) {
-			LOG.error("Error while crawling, {} will be visited again", currentSynsetId, e);
+			LOG.error("Error while crawling, {} will be visited again", currentSynsetId);
+			LOG.error("Error: ", e);
 			queue.add(currentSynsetId);
 			visitedSynsets.remove(currentSynsetId);
 		} finally {
