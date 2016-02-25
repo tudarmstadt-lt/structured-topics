@@ -18,7 +18,7 @@ A simple `mvn install` will create a .jar with all dependencies (`structured-top
 
 All modules are contained in the same jar. As many of the computations work on large data structures, it is recommended to provide additional memory via `-Xms1024M -Xmx8192M` (or larger values).
 
-###Compute sense similarities
+###Compute Sense Similarities
 
 Expected Input: sense clusters, as .csv.gz file with the format:
 
@@ -47,7 +47,7 @@ Parameters:
  - filterregex --> (optional) All senses and words are filtered by the regex `".*[a-zA-Z]+.*"`
  - ALL --> (optional) Each sense is similar all words in the cluster with the weight of the word. This creates a larger graph and ignores the N-parameter
  
-###Prune sense similarities
+###Prune Sense Similarities
 
 This takes the sense similarities from the previous step as input and prunes the number of similar senses.
 For many runs with different _N_ settings, it is cheaper to reuse and prune a file with the maximum required _N_ for all further computations like clustering.
@@ -137,7 +137,7 @@ Parameters:
  - queue ---> File where the queue of synsets is cached (csv.format)
  - cleanSenses ---> (optional) Some senses have additional information like pos-tag or the domain attached. This option will clean the senses before writing them to the output-file
  
-The output file will be in the following format:
+The output file will have the following format:
 ```
 <sense>\t<weight>\t<domain>\t<synset-id>
 ```
@@ -164,3 +164,24 @@ Write all senses from one domain to a separate file:
 ```
 awk -F$'\t' '{print >> ("foundSenses_"$3".csv")}' foundSenses.csv
 ```
+
+###Map clusters to babelnet domains
+To find clusters which are similar to the babelnet domains, the following module can be used:
+
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.evaluate.MapClustersToBabelnetSenses -bnetSenses foundSenses_COMPUTING.csv -clusters clusters-sorted-nsi-similarities-senses-wiki-n30-1600k.csv.gz -out clustersCOMPUTING.csv
+```
+
+Parameters:
+
+ - bnetSenses --> Senses from the previous step, the file may contain only senses from exact one domain.
+ - clusters ---> Clusters from the clustering module
+ - out ---> The scored clusters.
+ 
+The output file will have the following format:
+```
+<clusterId>\t<score1>\t<score2>\t<cluster-size>\t<cluster-words>
+```
+
+score1 adds the weight of all senses which are in the cluster, divided by the cluster size
+score2 is a cosine distance with the domain-weights for the senses and weight 1 for the cluster words
