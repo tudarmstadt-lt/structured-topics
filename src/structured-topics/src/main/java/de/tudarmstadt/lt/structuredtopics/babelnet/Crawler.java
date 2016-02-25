@@ -36,12 +36,12 @@ public class Crawler {
 	private static final Logger LOG = LoggerFactory.getLogger(Crawler.class);
 
 	private static final String OPTION_API_KEY = "key";
-	private static final String OPTION_STARTING_SYNSET = "synsetStart";
-	private static final String OPTION_DOMAIN = "domain";
+	private static final String OPTION_STARTING_SYNSETS = "synsetStart";
 	private static final String OPTION_MAX_STEPS = "steps";
 	private static final String OPTION_FOUND_SENSES_FILE = "out";
 	private static final String OPTION_VISITED_SYNSETS_FILE = "visited";
 	private static final String OPTION_QUEUE = "queue";
+	private static final String OPTION_CLEAN_SENSES = "cleanSenses";
 
 	private static final String OPTION_API_CACHE = "apiCache";
 	private static final long SAVE_EACH_MS = TimeUnit.SECONDS.toMillis(30);
@@ -56,14 +56,14 @@ public class Crawler {
 			CommandLine cl = new DefaultParser().parse(options, args, true);
 			File cacheLocation = new File(cl.getOptionValue(OPTION_API_CACHE));
 			Crawler crawler = new Crawler(cacheLocation, cl.getOptionValue(OPTION_API_KEY));
-			String startingSynset = cl.getOptionValue(OPTION_STARTING_SYNSET);
-			String domain = cl.getOptionValue(OPTION_DOMAIN);
+			Set<String> startingSynsets = Sets.newHashSet(cl.getOptionValue(OPTION_STARTING_SYNSETS).split(","));
 			int maxSteps = Integer.valueOf(cl.getOptionValue(OPTION_MAX_STEPS));
 			File out = new File(cl.getOptionValue(OPTION_FOUND_SENSES_FILE));
 			File queue = new File(cl.getOptionValue(OPTION_QUEUE));
 			File visited = new File(cl.getOptionValue(OPTION_VISITED_SYNSETS_FILE));
-			LOG.info("Crawling synset {} for domain {} with maxSteps {}", startingSynset, domain, maxSteps);
-			crawler.crawl(startingSynset, domain, maxSteps, out, queue, visited);
+			boolean cleanSenses = cl.hasOption(OPTION_CLEAN_SENSES);
+			LOG.info("Crawling synsets {} with maxSteps {}", startingSynsets, maxSteps);
+			crawler.crawl(startingSynsets, maxSteps, out, queue, visited, cleanSenses);
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments: {}", e.getMessage());
 			StringWriter sw = new StringWriter();
@@ -81,11 +81,9 @@ public class Crawler {
 		Option apiKey = Option.builder(OPTION_API_KEY).argName("api key").desc("The api key").hasArg().required()
 				.build();
 		options.addOption(apiKey);
-		Option domain = Option.builder(OPTION_DOMAIN).argName("domain")
-				.desc("the domain to aggregate, e.g. 'COMPUTING'").required().hasArg().build();
-		options.addOption(domain);
-		Option labeledClusters = Option.builder(OPTION_STARTING_SYNSET).argName("starting synset")
-				.desc("Id of the synset to start with, e.g. 'bn:00048043n'").hasArg().build();
+		Option labeledClusters = Option.builder(OPTION_STARTING_SYNSETS).argName("starting synsets")
+				.desc("csv list of ids of the synsets to start with, e.g. 'bn:00048043n,bn:00004625n'").hasArg()
+				.build();
 		options.addOption(labeledClusters);
 		Option steps = Option.builder(OPTION_MAX_STEPS).argName("max steps")
 				.desc("Number of steps to perform. Each step will expand one synset (up to 2 api-calls)").hasArg()
@@ -104,15 +102,21 @@ public class Crawler {
 		Option apiCache = Option.builder(OPTION_API_CACHE).argName("apiCache")
 				.desc("Folder where api calls will be cached").required().hasArg().build();
 		options.addOption(apiCache);
+		Option cleanSenses = Option.builder(OPTION_CLEAN_SENSES).argName("clean senses")
+				.desc("(optional), if set, this will clean senses like <sense>#tag#id and <sense>_(domain) to <sense>. "
+						+ "More specific: this will remove everything after the second last '#' and the last '_(' (each inclusive)")
+				.build();
+		options.addOption(cleanSenses);
 		return options;
 	}
 
 	@SuppressWarnings("rawtypes")
-	private void crawl(String startingSynsetId, String domain, int maxSteps, File outFile, File queueFile,
-			File visitedFile) {
+	private void crawl(Set<String> startingSynsetsId, int maxSteps, File outFile, File queueFile, File visitedFile,
+			boolean cleanSenses) {
 		Set<String> visitedSynsets = Utils.loadUniqueLines(visitedFile);
 		LinkedHashSet<String> queue = Sets.newLinkedHashSet(Utils.loadUniqueLines(queueFile));
-		queue.add(startingSynsetId);
+		queue.addAll(startingSynsetsId);
+		Set<String> foundDomains = Sets.newHashSet();
 		int step = 0;
 		int countFoundSenses = 0;
 		String currentSynsetId = null;
@@ -126,7 +130,6 @@ public class Crawler {
 				} else {
 					// only count a step if a new synset will be expanded
 					step++;
-					LOG.info("Current synsetid: {}", currentSynsetId);
 					String synset = api.getSynset(currentSynsetId);
 					if (StringUtils.isEmpty(synset)) {
 						LOG.error("Empty response from api for synset {}, putting it at end of queue", currentSynsetId);
@@ -137,28 +140,36 @@ public class Crawler {
 					Gson gson = new GsonBuilder().create();
 					Map json = (Map) gson.fromJson(synset, Object.class);
 					String mainSense = (String) json.get("mainSense");
-					Map domains = (Map) json.get("domains");
-					if (!domains.containsKey(domain)) {
-						LOG.info("Skipping {} from synset {}, not in domain {}", mainSense, currentSynsetId, domain);
+					if (mainSense == null) {
+						LOG.error("Empty main sense in synset {}", currentSynsetId);
+						continue;
 					} else {
-						Object domainWeight = domains.get(domain);
-						String senseWeight = mainSense + "\t" + domainWeight + "\t" + currentSynsetId;
-						LOG.info("Adding {}", senseWeight);
-						out.write(senseWeight + "\n");
-						out.flush();
-						countFoundSenses++;
-						// found a sense from domain, expand synset
-						String edgesJson = api.getEdges(currentSynsetId);
+						Map domains = (Map) json.get("domains");
+						if (cleanSenses) {
+							mainSense = clean(mainSense);
+						}
+						for (Object domain : domains.keySet()) {
+							foundDomains.add((String) domain);
+							Object domainWeight = domains.get(domain);
+							String senseWeight = mainSense + "\t" + domainWeight + "\t" + domain + "\t"
+									+ currentSynsetId;
+							LOG.info("Adding {}", senseWeight);
+							out.write(senseWeight + "\n");
+							out.flush();
+							countFoundSenses++;
+						}
+					}
+					// found a sense from domain, expand synset
+					String edgesJson = api.getEdges(currentSynsetId);
 
-						List edges = (List) gson.fromJson(edgesJson, Object.class);
-						for (Object edge : edges) {
-							Map edgeData = (Map) edge;
-							String targetSynset = (String) edgeData.get("target");
-							String language = (String) edgeData.get("language");
-							// TODO all languages?
-							if (language.equals("EN")) {
-								queue.add(targetSynset);
-							}
+					List edges = (List) gson.fromJson(edgesJson, Object.class);
+					for (Object edge : edges) {
+						Map edgeData = (Map) edge;
+						String targetSynset = (String) edgeData.get("target");
+						String language = (String) edgeData.get("language");
+						// TODO all languages?
+						if (language.equals("EN")) {
+							queue.add(targetSynset);
 						}
 					}
 
@@ -179,6 +190,20 @@ public class Crawler {
 			saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
 			LOG.info("Finished");
 		}
+	}
+
+	protected static String clean(String mainSense) {
+		// <sense>#tag#id
+		int lastHash = mainSense.lastIndexOf("#");
+		int secondLastHash = mainSense.lastIndexOf("#", lastHash - 1);
+		// <sense>_(domain)
+		int domainStart = mainSense.lastIndexOf("_(");
+		int cleanIndex = Math.max(secondLastHash, domainStart);
+		// at least one matched, prune as little as possible
+		if (cleanIndex != -1) {
+			return mainSense.substring(0, cleanIndex);
+		}
+		return mainSense;
 	}
 
 	private void saveQueueAndVisited(File queueFile, File visitedFile, Set<String> visitedSynsets,

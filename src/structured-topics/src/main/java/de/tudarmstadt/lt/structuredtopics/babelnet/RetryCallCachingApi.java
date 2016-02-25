@@ -2,7 +2,6 @@ package de.tudarmstadt.lt.structuredtopics.babelnet;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -33,7 +32,7 @@ public class RetryCallCachingApi extends CachingApi {
 			} catch (KeyLimitReachedException e) {
 				LOG.warn("Key limit reached, waiting...");
 				sleep(1, TimeUnit.HOURS);
-			} catch (ConnectException e) {
+			} catch (IOException e) {
 				LOG.warn("Connection error", e);
 				sleep(1, TimeUnit.HOURS);
 			}

@@ -67,16 +67,13 @@ public class CachingApi {
 	 */
 	public String getSynset(String synsetId) throws KeyLimitReachedException, IOException {
 		File cachedResult = new File(cacheLocation, synsetId.replace(":", "_") + ".json");
-		LOG.info("Reading synset {}", synsetId);
 		if (cachedResult.exists()) {
-			LOG.info("Synstet {} Found in cache: {}", synsetId, cachedResult.getAbsolutePath());
 			String result = Files.toString(cachedResult, UTF_8);
 			if (StringUtils.isEmpty(result)) {
 				LOG.error("Empty result in file {}, deleting file from cache", cachedResult.getAbsolutePath());
 			}
 			return result;
 		} else {
-			LOG.info("Not in cache, calling api");
 			Map<String, String> parameters = Maps.newHashMap();
 			parameters.put("id", synsetId);
 			String result = callApi(API_GET_SYNSET, parameters);
@@ -97,12 +94,9 @@ public class CachingApi {
 	 */
 	public String getEdges(String synsetId) throws KeyLimitReachedException, IOException {
 		File cachedResult = new File(cacheLocation, synsetId.replace(":", "_") + "_edges.json");
-		LOG.info("Reading synset edges {}", synsetId);
 		if (cachedResult.exists()) {
-			LOG.info("Found in cache");
 			return Files.toString(cachedResult, UTF_8);
 		} else {
-			LOG.info("Not in cache, calling api");
 			Map<String, String> parameters = Maps.newHashMap();
 			parameters.put("id", synsetId);
 			String result = callApi(API_GET_EDGES, parameters);
@@ -157,8 +151,6 @@ public class CachingApi {
 				throw new IOException("Status Code 400 " + response.toString());
 			}
 			responseToString = responseToString(response);
-			LOG.info("Accessing {}\nresponse:\n{}", getSynsetUri.toString(),
-					StringUtils.abbreviate(responseToString, 500));
 		} catch (URISyntaxException e) {
 			// internal error
 			Throwables.propagate(e);

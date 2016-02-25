@@ -108,6 +108,59 @@ Each word of the data will be printed to a separate line and labeled if it was p
 The result will be in the format
 
 ```
-<word>\t<tag>\ŧ<labels>
+<word>\t<tag>\t<labels>
 ```
 Where tag is empty or "NE" if the word is part of a named entity and labels is empty or a csv-list of all lables found in the search index for the given word.
+
+###Crawling Babelnet
+
+The babelnet crawler can be used to fetch domain information from <http://babelnet.org>.
+The crawler will start at a given set of synsets and follow their edges.
+The main sense of each synset is collected, together with the domain(s) of the synset.
+Responses of the API are cached to maximize the value of the api-key quota.
+The crawler will cache visited synsets and the queue in short intervals and can be restarted from the last state by calling it with the same parameters again. In case of connection errors or a reached key limit, the crawler will suspend and try again in one hour.
+
+Usage:
+
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.babelnet.Crawler -key <key> -synsetStart bn:00048043n -steps 100000000 -out foundSenses.csv -queue queue.csv -visited visited.csv -apiCache babelnetApiCache -cleanSenses
+```
+
+Parameters:
+
+ - key --> API key for babelnet
+ - apiCache ---> directory where responses from the api are cached
+ - synsetStart --> IDs of the starting synsets. Pass as csv list (<id1>,<id2>,...) or single element (<id1>)
+ - steps --> Maximum number of steps. One step = visiting one synset and expanding all edges
+ - out ---> File where the found senses are saved in csv format
+ - visited ---> File where ids of visited synsets are saved in csv format
+ - queue ---> File where the queue of synsets is cached (csv.format)
+ - cleanSenses ---> (optional) Some senses have additional information like pos-tag or the domain attached. This option will clean the senses before writing them to the output-file
+ 
+The output file will be in the following format:
+```
+<sense>\t<weight>\t<domain>\t<synset-id>
+```
+
+Example:
+
+```
+interview       1.0     LANGUAGE_AND_LINGUISTICS        bn:00047238n
+procedure       0.430608877889  COMPUTING       bn:00036826n
+procedure       0.385539749925  MATHEMATICS     bn:00036826n
+```
+
+If a senses belongs to multiple domains, it is added once for each domain.
+Some commands to work with the result file:
+
+Print all domains:
+
+```
+<foundSenses.csv awk '{print $3}' | sort | uniq
+```
+
+Write all senses from one domain to a separate file:
+
+```
+awk -F$'\t' '{print >> ("foundSenses_"$3".csv")}' foundSenses.csv
+```
