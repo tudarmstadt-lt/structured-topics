@@ -33,12 +33,11 @@ import de.tudarmstadt.lt.structuredtopics.Utils;
  * the third column is expected to contain the words of the cluster
  * (comma-separated). The output will be a tab-separated .csv file, containing
  * the clusterid in the first column, a calculated score for the cluster in the
- * second column and all cluster labels in the third column (same as from the
- * input format). Clusters with a score below 0.0001 are ommited.
+ * second and third column and all cluster labels in the 4. column (same as from
+ * the input format).
  *
  */
 public class MapClustersToBabelnetSenses {
-	private static final double SCORE_THRESHOLD = 0.0001;
 
 	private static final Logger LOG = LoggerFactory.getLogger(MapClustersToBabelnetSenses.class);
 
@@ -82,13 +81,15 @@ public class MapClustersToBabelnetSenses {
 				// TODO negative domain weight on babelnet, how to handle?
 				if (weight < 0) {
 					weight = 0.01;
+				} else if (weight > 1) {
+					weight = 1.0;
 				}
 				index.put(sense.toLowerCase(), weight);
 				// words are separated by "_", so tokenize the sense to words
 				// and add them too
 				String[] senseWords = sense.split("_");
 				for (String s : senseWords) {
-					index.put(s, weight);
+					index.put(s.toLowerCase(), weight);
 				}
 
 			}
@@ -106,11 +107,12 @@ public class MapClustersToBabelnetSenses {
 					String[] split = line.split("\t");
 					int clusterIndex = Integer.parseInt(split[0]);
 					String[] clusterWords = split[2].split(",\\s*");
-					double score = score(index, clusterWords);
-					if (score > SCORE_THRESHOLD) {
-						String outLine = clusterIndex + "\t" + df.format(score) + "\t" + split[2];
-						out.write(outLine + "\n");
-					}
+					removeTagAndIndex(clusterWords);
+					double score1 = scoreSimple(index, clusterWords);
+					double score2 = scoreCosine(index, clusterWords);
+					String outLine = clusterIndex + "\t" + df.format(score1) + "\t" + df.format(score2) + "\t"
+							+ clusterWords.length + "\t" + split[2];
+					out.write(outLine + "\n");
 				}
 			}
 		} catch (IOException e) {
@@ -119,15 +121,24 @@ public class MapClustersToBabelnetSenses {
 
 	}
 
-	private static double score(Map<String, Double> index, String[] clusterWords) {
+	private static void removeTagAndIndex(String[] clusterWords) {
+		for (int i = 0; i < clusterWords.length; i++) {
+			String word = clusterWords[i];
+			int firstHash = word.indexOf("#");
+			if (firstHash != -1) {
+				clusterWords[i] = word.substring(0, firstHash);
+			}
+		}
+	}
+
+	/*
+	 * Simple score: (sum of all domain-weights of matching senses)/(size of
+	 * cluster)
+	 */
+	private static double scoreSimple(Map<String, Double> index, String[] clusterWords) {
 		int hits = 0;
 		double score = 0;
 		for (String word : clusterWords) {
-			// remove postag and sense id
-			int firstHash = word.indexOf("#");
-			if (firstHash != -1) {
-				word = word.substring(0, firstHash);
-			}
 			Double indexWeight = index.get(word.toLowerCase());
 			if (indexWeight != null) {
 				score += indexWeight;
@@ -139,6 +150,27 @@ public class MapClustersToBabelnetSenses {
 		} else {
 			return score / clusterWords.length;
 		}
+	}
+
+	/*
+	 * Cosine distance, uses weights of the index and weights of 1 for the
+	 * cluster words
+	 */
+	private static double scoreCosine(Map<String, Double> index, String[] clusterWords) {
+		double clusterSize = clusterWords.length;
+		double indexSize = 0;
+		for (Double weight : index.values()) {
+			indexSize += Math.abs(weight);
+		}
+		double score = 0;
+		for (String word : clusterWords) {
+			Double indexWeight = index.get(word.toLowerCase());
+			if (indexWeight != null) {
+				score += Math.abs(indexWeight);
+			}
+		}
+		double result = score / (clusterSize * indexSize);
+		return result;
 	}
 
 	private static Options createOptions() {
