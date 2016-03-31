@@ -87,8 +87,13 @@
 			<version>1.7.12</version>
 		</dependency>
 		<dependency>
-			<groupId>org.tinylog</groupId>
-			<artifactId>slf4j-binding</artifactId>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>1.0.1</version>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-core</artifactId>
 			<version>1.0.1</version>
 		</dependency>
 		<!-- collections and stuff -->
