@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -37,9 +38,10 @@ public class CachingApi {
 
 	}
 
-	private static final String API = "babelnet.io/v2/";
+	private static final String API = "babelnet.io/v3/";
 	private static final String API_GET_SYNSET = "getSynset";
 	private static final String API_GET_EDGES = "getEdges";
+	private static final String API_GET_SENSES = "getSenses";
 	private static final int MS_BETWEEN_REQUEST = 500;
 	private static final Logger LOG = LoggerFactory.getLogger(CachingApi.class);
 
@@ -63,7 +65,7 @@ public class CachingApi {
 	 * @throws KeyLimitReachedException
 	 *             if the key is invalid or the key limit is reached
 	 * @throws IOException
-	 *             if any io-error occures
+	 *             if any io-error occurs
 	 */
 	public String getSynset(String synsetId) throws KeyLimitReachedException, IOException {
 		File cachedResult = new File(cacheLocation, synsetId.replace(":", "_") + ".json");
@@ -71,6 +73,7 @@ public class CachingApi {
 			String result = Files.toString(cachedResult, UTF_8);
 			if (StringUtils.isEmpty(result)) {
 				LOG.error("Empty result in file {}, deleting file from cache", cachedResult.getAbsolutePath());
+				cachedResult.delete();
 			}
 			return result;
 		} else {
@@ -84,18 +87,53 @@ public class CachingApi {
 
 	/**
 	 * 
+	 * @param word
+	 *            any word
+	 * @return The JSON-Response of the getSenses Api call
+	 * @throws KeyLimitReachedException
+	 *             if the key is invalid or the key limit is reached
+	 * @throws IOException
+	 *             if any io-error occurs
+	 */
+	public String getSenses(String word) throws KeyLimitReachedException, IOException {
+		File cachedResult = new File(cacheLocation, "word_" + URLEncoder.encode(word, "UTF-8") + ".json");
+		if (cachedResult.exists()) {
+			String result = Files.toString(cachedResult, UTF_8);
+			if (StringUtils.isEmpty(result)) {
+				LOG.error("Empty result in file {}, deleting file from cache", cachedResult.getAbsolutePath());
+				cachedResult.delete();
+			}
+			return result;
+		} else {
+			Map<String, String> parameters = Maps.newHashMap();
+			parameters.put("word", word);
+			// TODO multi language support?
+			parameters.put("lang", "EN");
+			String result = callApi(API_GET_SENSES, parameters);
+			Files.write(result, cachedResult, UTF_8);
+			return result;
+		}
+	}
+
+	/**
+	 * 
 	 * @param synsetId
 	 *            id of the synset
 	 * @return The JSON-Response of the getEdges Api call
 	 * @throws KeyLimitReachedException
 	 *             if the key is invalid or the key limit is reached
 	 * @throws IOException
-	 *             if any io-error occures
+	 *             if any io-error occurs
 	 */
 	public String getEdges(String synsetId) throws KeyLimitReachedException, IOException {
 		File cachedResult = new File(cacheLocation, synsetId.replace(":", "_") + "_edges.json");
 		if (cachedResult.exists()) {
-			return Files.toString(cachedResult, UTF_8);
+			String result = Files.toString(cachedResult, UTF_8);
+			if (StringUtils.isEmpty(result)) {
+				LOG.error("Empty result in file {}, deleting file from cache", cachedResult.getAbsolutePath());
+				cachedResult.delete();
+			}
+			return result;
 		} else {
 			Map<String, String> parameters = Maps.newHashMap();
 			parameters.put("id", synsetId);

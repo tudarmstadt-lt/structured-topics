@@ -23,6 +23,8 @@ public class RetryCallCachingApi extends CachingApi {
 		super(cacheLocation, apiKey);
 	}
 
+	private int lastApiCallCount = 0;
+
 	@Override
 	protected String callApi(String method, Map<String, String> parameters) throws IOException {
 		String result = null;
@@ -30,7 +32,8 @@ public class RetryCallCachingApi extends CachingApi {
 			try {
 				result = super.callApi(method, parameters);
 			} catch (KeyLimitReachedException e) {
-				LOG.warn("Key limit reached, waiting...");
+				LOG.warn("Key limit reached, waiting... ({} api calls before)", getApiCallCount() - lastApiCallCount);
+				lastApiCallCount = getApiCallCount();
 				sleep(1, TimeUnit.HOURS);
 			} catch (IOException e) {
 				LOG.warn("Connection error", e);

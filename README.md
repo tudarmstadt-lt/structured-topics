@@ -183,5 +183,5 @@ The output file will have the following format:
 <clusterId>\t<score1>\t<score2>\t<cluster-size>\t<cluster-words>
 ```
 
-score1 adds the weight of all senses which are in the cluster, divided by the cluster size
-score2 is a cosine distance with the domain-weights for the senses and weight 1 for the cluster words
+ - score1 adds the weight of all senses which are in the cluster, divided by the cluster size
+ - score2 is a cosine distance with the domain-weights for the senses and weight 1 for the cluster words
