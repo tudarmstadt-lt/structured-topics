@@ -165,7 +165,7 @@ public class Utils {
 					writer.write("\t");
 					for (Feature f : senseCluster.getValue()) {
 						if (f.getSenseId() != null) {
-							writer.write(f.getWord() + "#" + f.getSenseId() + f.getWeight());
+							writer.write(f.getWord() + "#" + f.getSenseId() + ":" + f.getWeight());
 						} else {
 							writer.write(f.getWord());
 						}
