@@ -76,17 +76,22 @@ public class SynsetRetriever {
 				while ((word = in.readLine()) != null) {
 					String synsetIds = "";
 					if (word.trim().matches(WORD_REGEX)) {
-						String sensesJson = api.getSenses(word);
-						List json = (List) gson.fromJson(sensesJson, Object.class);
-						for (Object sense : json) {
-							Map synsetIdValues = (Map) ((Map) sense).get("synsetID");
-							String synsetId = (String) synsetIdValues.get("id");
-							if (synsetId != null) {
-								synsetIds += synsetId + ", ";
+						try {
+							String sensesJson = api.getSenses(word);
+							List json = (List) gson.fromJson(sensesJson, Object.class);
+							for (Object sense : json) {
+								Map synsetIdValues = (Map) ((Map) sense).get("synsetID");
+								String synsetId = (String) synsetIdValues.get("id");
+								if (synsetId != null) {
+									synsetIds += synsetId + ", ";
+								}
 							}
+						} catch (Exception e) {
+							LOG.error("Error while retrieving synset ids for word {}", word, e);
 						}
 					}
 					out.write(word + "\t" + synsetIds + "\n");
+					out.flush();
 				}
 			}
 		}
