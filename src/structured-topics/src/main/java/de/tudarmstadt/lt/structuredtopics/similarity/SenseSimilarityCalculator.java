@@ -53,7 +53,7 @@ public class SenseSimilarityCalculator {
 	private static final String OPTION_OUT_FILE = "out";
 	private static final String OPTION_IN_FILE = "in";
 	private static final String OPTION_FILTER_POS_TAG = "filterpos";
-	private static final String OPTION_FILTER_REGEXG = "filterregex";
+	private static final String OPTION_FILTER_REGEX = "filterregex";
 	private static final Logger LOG = LoggerFactory.getLogger(SenseSimilarityCalculator.class);
 
 	public static final String WORD_REGEX = ".*[a-zA-Z]+.*";
@@ -70,7 +70,7 @@ public class SenseSimilarityCalculator {
 				LOG.info("Filtering by pos-tag");
 				Utils.filterClustersByPosTag(clusters);
 			}
-			if (line.hasOption(OPTION_FILTER_REGEXG)) {
+			if (line.hasOption(OPTION_FILTER_REGEX)) {
 				LOG.info("Filtering by regex");
 				Utils.filterClustersByRegEx(clusters, WORD_REGEX);
 			}
@@ -135,7 +135,7 @@ public class SenseSimilarityCalculator {
 
 	private static void writeLuceneBasedSimilarities(File output, int collectSimilarSensesPerSense,
 			Map<String, Map<Integer, List<Feature>>> clusters, int total, Directory index)
-					throws InterruptedException, IOException {
+			throws InterruptedException, IOException {
 		Stopwatch watch = Stopwatch.createStarted();
 		IndexReader reader = DirectoryReader.open(index);
 		IndexSearcher searcher = new IndexSearcher(reader);
@@ -196,8 +196,7 @@ public class SenseSimilarityCalculator {
 				Document senseDocument = new Document();
 				for (Entry<Integer, List<Feature>> sense : cluster.getValue().entrySet()) {
 					if (count++ % 100 == 0) {
-						LOG.info("indexing sense {}/{}", count, total);
-						LOG.info("Index size: {}bytes", index.ramBytesUsed());
+						LOG.info("indexing sense {}/{}, index size: {} bytes", count, total, index.ramBytesUsed());
 					}
 					Integer senseId = sense.getKey();
 					senseDocument.add(new StringField("sense_word_id", senseWord + "#" + senseId, Store.YES));
@@ -237,7 +236,7 @@ public class SenseSimilarityCalculator {
 				.desc("Filters all senses by pos-tag (NN, NP or JJ)").build();
 		options.addOption(filterPosTag);
 
-		Option filterRegex = Option.builder(OPTION_FILTER_REGEXG).argName("filter by regex")
+		Option filterRegex = Option.builder(OPTION_FILTER_REGEX).argName("filter by regex")
 				.desc("Filters all senses by the regular expression " + WORD_REGEX).build();
 		options.addOption(filterRegex);
 		return options;

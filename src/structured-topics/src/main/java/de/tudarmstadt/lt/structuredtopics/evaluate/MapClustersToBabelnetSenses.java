@@ -3,7 +3,6 @@ package de.tudarmstadt.lt.structuredtopics.evaluate;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -11,6 +10,7 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
@@ -28,13 +28,14 @@ import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 import de.tudarmstadt.lt.structuredtopics.Utils;
 
 /**
- * Rates clusters of words to babelnet senses. The clusters should be in a csv
- * file (tab separated). The first column is expected to contain the clusterid,
- * the third column is expected to contain the words of the cluster
+ * Rates clusters of words to babelnet senses. The clusters should be in a
+ * csv.gz file (tab separated). The first column is expected to contain the
+ * clusterid, the third column is expected to contain the words of the cluster
  * (comma-separated). The output will be a tab-separated .csv file, containing
- * the clusterid in the first column, a calculated score for the cluster in the
- * second and third column and all cluster labels in the 4. column (same as from
- * the input format).
+ * the clusterid in the first column, the top domains with each score in the
+ * second column (domain|score, domain|score), scores for each found domain in
+ * the third column (domain|simpleScore|cosineScore, domain|simpleScore...) and
+ * all cluster labels in the 4. column (same as from the input format).
  *
  */
 public class MapClustersToBabelnetSenses {
@@ -54,7 +55,7 @@ public class MapClustersToBabelnetSenses {
 			File sensesFile = new File(cl.getOptionValue(OPTION_SENSES_FILE));
 			Set<String> sensesLines = Utils.loadUniqueLines(sensesFile);
 			LOG.info("building index");
-			Map<String, Double> index = buildIndexFromSenses(sensesLines);
+			Map<String, Map<String, Double>> index = buildIndexFromSenses(sensesLines);
 			LOG.info("Scoring clusters");
 			File out = new File(cl.getOptionValue(OPTION_OUTPUT_FILE));
 			scoreAndWriteClusters(clusters, index, out);
@@ -71,11 +72,19 @@ public class MapClustersToBabelnetSenses {
 		}
 	}
 
-	private static Map<String, Double> buildIndexFromSenses(Set<String> sensesLines) {
-		Map<String, Double> index = Maps.newHashMap();
+	// domain - (sense - weight)
+	private static Map<String, Map<String, Double>> buildIndexFromSenses(Set<String> sensesLines) {
+		Map<String, Map<String, Double>> domains = Maps.newHashMap();
 		for (String line : sensesLines) {
 			String[] split = line.split("\t");
-			if (split.length > 2) {
+			if (split.length > 3) {
+				String domain = split[2];
+				Map<String, Double> domainSenses = domains.get(domain);
+				if (domainSenses == null) {
+					LOG.info("Adding index for domain {}", domain);
+					domainSenses = Maps.newHashMap();
+					domains.put(domain, domainSenses);
+				}
 				String sense = split[0];
 				Double weight = Double.valueOf(split[1]);
 				// TODO negative domain weight on babelnet, how to handle?
@@ -84,33 +93,57 @@ public class MapClustersToBabelnetSenses {
 				} else if (weight > 1) {
 					weight = 1.0;
 				}
-				index.put(sense.toLowerCase(), weight);
+				domainSenses.put(sense.toLowerCase(), weight);
 				// words are separated by "_", so tokenize the sense to words
 				// and add them too
 				String[] senseWords = sense.split("_");
 				for (String s : senseWords) {
-					index.put(s.toLowerCase(), weight);
+					domainSenses.put(s.toLowerCase(), weight);
 				}
-
 			}
 		}
-		return index;
+		return domains;
 	}
 
-	private static void scoreAndWriteClusters(File clusters, Map<String, Double> index, File outFile) {
+	private static void scoreAndWriteClusters(File clusters, Map<String, Map<String, Double>> index, File outFile) {
 		DecimalFormat df = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 		df.setMaximumFractionDigits(340);
-		try (BufferedWriter out = new BufferedWriter(new FileWriter(outFile))) {
+		int count = 0;
+		try (BufferedWriter out = Utils.openGzipWriter(outFile)) {
 			try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
 				String line = null;
 				while ((line = in.readLine()) != null) {
+					if (count++ % 100 == 0) {
+						LOG.info("Progress: Line {}", count);
+					}
 					String[] split = line.split("\t");
 					int clusterIndex = Integer.parseInt(split[0]);
 					String[] clusterWords = split[2].split(",\\s*");
 					removeTagAndIndex(clusterWords);
-					double score1 = scoreSimple(index, clusterWords);
-					double score2 = scoreCosine(index, clusterWords);
-					String outLine = clusterIndex + "\t" + df.format(score1) + "\t" + df.format(score2) + "\t"
+					StringBuilder scores = new StringBuilder();
+					double topSimpleScore = 0;
+					String topSimpleScoreDomain = "";
+					double topCosineScore = 0;
+					String topCosineScoreDomain = "";
+
+					for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
+						String domainName = domain.getKey();
+						double simpleScore = scoreSimple(domain.getValue(), clusterWords);
+						if (simpleScore > topSimpleScore) {
+							topSimpleScore = simpleScore;
+							topSimpleScoreDomain = domainName;
+						}
+						double cosineScore = scoreCosine(domain.getValue(), clusterWords);
+						if (cosineScore > topCosineScore) {
+							topCosineScore = cosineScore;
+							topCosineScoreDomain = domainName;
+						}
+						scores.append(domainName).append("|").append(df.format(simpleScore)).append("|")
+								.append(df.format(cosineScore)).append(", ");
+					}
+					String topDomains = topSimpleScoreDomain + "|" + df.format(topSimpleScore) + ", "
+							+ topCosineScoreDomain + "|" + df.format(topCosineScore);
+					String outLine = clusterIndex + "\t" + topDomains + "\t" + scores.toString() + "\t"
 							+ clusterWords.length + "\t" + split[2];
 					out.write(outLine + "\n");
 				}
@@ -179,7 +212,8 @@ public class MapClustersToBabelnetSenses {
 				.hasArg().build();
 		options.addOption(clusters);
 		Option senses = Option.builder(OPTION_SENSES_FILE).argName("senses")
-				.desc("Senses from babelnet crawlers (.csv, one per line)").required().hasArg().build();
+				.desc("Senses from babelnet crawlers (.csv, one per line). Three tab separated columns expected: sense, weight, domain")
+				.required().hasArg().build();
 		options.addOption(senses);
 		Option output = Option.builder(OPTION_OUTPUT_FILE).argName("out")
 				.desc("the clusters, ordered by their weight to the domain, capped at zero").required().hasArg()
