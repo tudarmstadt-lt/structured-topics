@@ -144,11 +144,16 @@ public class MapClustersToBabelnetSenses {
 							topCosineScore = cosineScore;
 							topCosineScoreDomain = domainName;
 						}
-						scores.append(domainName).append("|").append(df.format(simpleScore)).append("|")
-								.append(df.format(cosineScore)).append(", ");
+						if (simpleScore != 0 || cosineScore != 0) {
+							scores.append(domainName).append("|").append(df.format(simpleScore)).append("|")
+									.append(df.format(cosineScore)).append(", ");
+						}
 					}
-					String topDomains = topSimpleScoreDomain + "|" + df.format(topSimpleScore) + ", "
-							+ topCosineScoreDomain + "|" + df.format(topCosineScore);
+					String topDomains = "";
+					if (topSimpleScore != 0 || topCosineScore != 0) {
+						topDomains = topSimpleScoreDomain + "|" + df.format(topSimpleScore) + ", "
+								+ topCosineScoreDomain + "|" + df.format(topCosineScore);
+					}
 					String outLine = clusterIndex + "\t" + topDomains + "\t" + scores.toString() + "\t"
 							+ clusterWords.length + "\t" + split[2];
 					synchronized (out) {
