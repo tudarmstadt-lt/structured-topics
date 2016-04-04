@@ -19,9 +19,9 @@ public class DdtFilter {
 		File out = new File(args[1]);
 		Parser parser = new Parser();
 		Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(in, InputMode.GZ);
-		System.out.println("Senses: " + Utils.countSenses(clusters));
-		System.out.println("filtering pos tags");
-		Utils.filterClustersByPosTag(clusters);
+		// System.out.println("Senses: " + Utils.countSenses(clusters));
+		// System.out.println("filtering pos tags");
+		// Utils.filterClustersByPosTag(clusters);
 		System.out.println("Senses: " + Utils.countSenses(clusters));
 		System.out.println("filtering by regex");
 		Utils.filterClustersByRegEx(clusters, WORD_REGEX);
