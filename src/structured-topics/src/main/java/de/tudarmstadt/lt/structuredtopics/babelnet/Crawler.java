@@ -161,7 +161,10 @@ public class Crawler {
 					}
 					// found a sense from domain, expand synset
 					String edgesJson = api.getEdges(currentSynsetId);
-
+					if (StringUtils.isEmpty(edgesJson)) {
+						LOG.error("Failed to expand synset {}", currentSynsetId);
+						continue;
+					}
 					List edges = (List) gson.fromJson(edgesJson, Object.class);
 					for (Object edge : edges) {
 						Map edgeData = (Map) edge;

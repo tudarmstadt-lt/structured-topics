@@ -26,7 +26,7 @@ public class RetryCallCachingApi extends CachingApi {
 	private int lastApiCallCount = 0;
 
 	@Override
-	protected String callApi(String method, Map<String, String> parameters) throws IOException {
+	protected String callApi(String method, Map<String, String> parameters) {
 		String result = null;
 		while (result == null) {
 			try {
@@ -37,7 +37,7 @@ public class RetryCallCachingApi extends CachingApi {
 				sleep(1, TimeUnit.HOURS);
 			} catch (IOException e) {
 				LOG.warn("Connection error", e);
-				sleep(1, TimeUnit.HOURS);
+				return null;
 			}
 		}
 		return result;

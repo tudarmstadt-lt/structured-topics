@@ -17,6 +17,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,8 +77,13 @@ public class SynsetRetriever {
 				while ((word = in.readLine()) != null) {
 					String synsetIds = "";
 					if (word.trim().matches(WORD_REGEX)) {
+						LOG.info("Searching synsets for word {}", word);
 						try {
 							String sensesJson = api.getSenses(word);
+							if (StringUtils.isEmpty(sensesJson)) {
+								LOG.error("Empty response for word {}", word);
+								continue;
+							}
 							List json = (List) gson.fromJson(sensesJson, Object.class);
 							for (Object sense : json) {
 								Map synsetIdValues = (Map) ((Map) sense).get("synsetID");
@@ -95,7 +101,7 @@ public class SynsetRetriever {
 				}
 			}
 		}
-
+		LOG.info("Done");
 	}
 
 	private static Options createOptions() {
