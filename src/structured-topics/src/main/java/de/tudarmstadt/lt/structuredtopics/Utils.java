@@ -61,8 +61,13 @@ public class Utils {
 
 		@Override
 		public boolean filter(String word) {
-			String withoutPosTag = word.substring(0, word.indexOf("#"));
-			matcher.reset(withoutPosTag);
+			int indexOfFirstHash = word.indexOf("#");
+			if (indexOfFirstHash != -1) {
+				String withoutPosTag = word.substring(0, indexOfFirstHash);
+				matcher.reset(withoutPosTag);
+			} else {
+				matcher.reset(word);
+			}
 			boolean filter = !matcher.matches();
 			return filter;
 		}
@@ -112,8 +117,13 @@ public class Utils {
 		for (Entry<String, Map<Integer, List<Feature>>> entry : clusters.entrySet()) {
 			String senseWord = entry.getKey();
 			boolean keepSenseWord = false;
-			if (!filter.filter(senseWord)) {
-				keepSenseWord = true;
+			try {
+				if (!filter.filter(senseWord)) {
+					keepSenseWord = true;
+				}
+			} catch (Exception e) {
+				LOG.error("Filter {} threw an exeption while filtering word {}. Word will be removed",
+						filter.getClass(), senseWord, e);
 			}
 			if (keepSenseWord) {
 				// filter senses
