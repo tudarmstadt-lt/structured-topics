@@ -8,10 +8,13 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -22,6 +25,7 @@ import org.apache.commons.cli.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
@@ -108,13 +112,15 @@ public class MapClustersToBabelnetSenses {
 	private static void scoreAndWriteClusters(File clusters, Map<String, Map<String, Double>> index, File outFile) {
 		DecimalFormat df = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 		df.setMaximumFractionDigits(340);
-		int count = 0;
 		try (BufferedWriter out = Utils.openGzipWriter(outFile)) {
-			try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
-				String line = null;
-				while ((line = in.readLine()) != null) {
-					if (count++ % 100 == 0) {
-						LOG.info("Progress: Line {}", count);
+			List<String> lines = readLines(clusters);
+			int size = lines.size();
+			AtomicInteger count = new AtomicInteger();
+			CountDownLatch latch = new CountDownLatch(lines.size());
+			lines.parallelStream().forEach(line -> {
+				try {
+					if (count.incrementAndGet() % 100 == 0) {
+						LOG.info("Progress line {}/{}", count.get(), size);
 					}
 					String[] split = line.split("\t");
 					int clusterIndex = Integer.parseInt(split[0]);
@@ -145,13 +151,32 @@ public class MapClustersToBabelnetSenses {
 							+ topCosineScoreDomain + "|" + df.format(topCosineScore);
 					String outLine = clusterIndex + "\t" + topDomains + "\t" + scores.toString() + "\t"
 							+ clusterWords.length + "\t" + split[2];
-					out.write(outLine + "\n");
+					synchronized (out) {
+						out.write(outLine + "\n");
+					}
+				} catch (Exception e) {
+					LOG.error("Error", e);
+				} finally {
+					latch.countDown();
 				}
-			}
-		} catch (IOException e) {
+			});
+			// keep the stream open until all parallel work is done
+			latch.await();
+		} catch (Exception e) {
 			LOG.error("Error", e);
 		}
 
+	}
+
+	private static List<String> readLines(File clusters) throws IOException {
+		List<String> lines = Lists.newArrayList();
+		try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
+			String line = null;
+			while ((line = in.readLine()) != null) {
+				lines.add(line);
+			}
+		}
+		return lines;
 	}
 
 	private static void removeTagAndIndex(String[] clusterWords) {
