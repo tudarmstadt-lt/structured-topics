@@ -28,6 +28,10 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Sets;
 
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
+import de.tudarmstadt.lt.structuredtopics.ddts.ClusterWord;
+import de.tudarmstadt.lt.structuredtopics.ddts.Sense;
+import de.tudarmstadt.lt.structuredtopics.ddts.SenseCluster;
+import de.tudarmstadt.lt.structuredtopics.ddts.SingleWord;
 
 public class Utils {
 
@@ -74,6 +78,24 @@ public class Utils {
 
 	}
 
+	public static BufferedReader openReader(File file) throws IOException {
+		InputStream in = new FileInputStream(file);
+		if (file.getName().endsWith(".gz")) {
+			in = new GZIPInputStream(in);
+		}
+		Reader reader = new InputStreamReader(in);
+		return new BufferedReader(reader);
+	}
+
+	public static BufferedWriter openWriter(File file) throws IOException {
+		OutputStream out = new FileOutputStream(file);
+		if (file.getName().endsWith(".gz")) {
+			out = new GZIPOutputStream(out);
+		}
+		Writer writer = new OutputStreamWriter(out);
+		return new BufferedWriter(writer);
+	}
+
 	public static BufferedReader openReader(File input, InputMode mode) throws IOException {
 		InputStream in = new FileInputStream(input);
 		if (mode == InputMode.GZ) {
@@ -92,30 +114,27 @@ public class Utils {
 		return new BufferedWriter(writer);
 	}
 
-	public static int countSenses(Map<String, Map<Integer, List<Feature>>> clusters) {
-		int count = 0;
-		for (Map<Integer, List<Feature>> v : clusters.values()) {
-			count += v.size();
-		}
-		return count;
-	}
-
-	public static void filterClustersByPosTag(Map<String, Map<Integer, List<Feature>>> clusters) {
+	public static void filterClustersByPosTag(List<SenseCluster> clusters) {
 		LOG.info("Filtering by POS-Tag");
+		// TODO implement filtering for multiwords
+		LOG.warn("Filtering POS_Tag for multiwords will only check the tag of the last word");
 		filterClusters(clusters, new PosTagFilter());
 	}
 
-	public static void filterClustersByRegEx(Map<String, Map<Integer, List<Feature>>> clusters, String regex) {
+	public static void filterClustersByRegEx(List<SenseCluster> clusters, String regex) {
 		LOG.info("Filtering by regex {}", regex);
 		filterClusters(clusters, new RegexFilter(regex));
 	}
 
-	private static void filterClusters(Map<String, Map<Integer, List<Feature>>> clusters, Filter filter) {
-		Set<String> keysToRemove = Sets.newHashSetWithExpectedSize(clusters.size());
-		int removedFeatures = 0;
+	private static void filterClusters(List<SenseCluster> clusters, Filter filter) {
+		int removedClusterWords = 0;
 		int removedSenses = 0;
-		for (Entry<String, Map<Integer, List<Feature>>> entry : clusters.entrySet()) {
-			String senseWord = entry.getKey();
+		for (int i = clusters.size() - 1; i >= 0; i--) {
+			if (i % 1000 == 0) {
+				LOG.info("Filtering cluster {}/{}", clusters.size() - 1 - i, clusters.size());
+			}
+			SenseCluster cluster = clusters.get(i);
+			String senseWord = cluster.getSense().getFullWord();
 			boolean keepSenseWord = false;
 			try {
 				if (!filter.filter(senseWord)) {
@@ -126,40 +145,26 @@ public class Utils {
 						filter.getClass(), senseWord, e);
 			}
 			if (keepSenseWord) {
-				// filter senses
-				Set<Integer> sensesToRemove = Sets.newHashSet();
-				Map<Integer, List<Feature>> senses = entry.getValue();
-				for (Entry<Integer, List<Feature>> senseEntry : senses.entrySet()) {
-					// filter sense words
-					List<Feature> features = senseEntry.getValue();
-					for (int i = features.size() - 1; i >= 0; i--) {
-						Feature feature = features.get(i);
-						if (filter.filter(feature.getWord())) {
-							features.remove(i);
-							removedFeatures++;
-						}
-					}
-					// if no words left -> remove sense
-					if (features.isEmpty()) {
-						sensesToRemove.add(senseEntry.getKey());
+				// filter cluster words
+				List<ClusterWord> clusterWords = cluster.getClusterWords();
+				for (int j = clusterWords.size() - 1; j >= 0; j--) {
+					ClusterWord clusterWord = clusterWords.get(j);
+					if (filter.filter(clusterWord.getFullWord())) {
+						clusterWords.remove(j);
+						removedClusterWords++;
 					}
 				}
-				for (Integer i : sensesToRemove) {
-					senses.remove(i);
+				// if no words left -> remove sense
+				if (clusterWords.isEmpty()) {
+					clusters.remove(i);
 					removedSenses++;
 				}
-				// if all senses are empty, remove entire sense
-				if (senses.isEmpty()) {
-					keysToRemove.add(senseWord);
-				}
 			} else {
-				keysToRemove.add(senseWord);
+				clusters.remove(i);
+				removedSenses++;
 			}
 		}
-		for (String s : keysToRemove) {
-			clusters.remove(s);
-		}
-		LOG.info("Filtered {} features and {} entire senses", removedFeatures, removedSenses);
+		LOG.info("Filtered {} cluster words and {} entire senses", removedClusterWords, removedSenses);
 	}
 
 	public static void writeClustersToFile(Map<String, Map<Integer, List<Feature>>> clusters, File out)
@@ -184,6 +189,56 @@ public class Utils {
 					writer.write("\n");
 				}
 			}
+		}
+	}
+
+	public static void writeClustersToFile(List<SenseCluster> clusters, File file) throws IOException {
+		try (BufferedWriter out = openWriter(file)) {
+			int count = 0;
+			for (SenseCluster cluster : clusters) {
+				count++;
+				if (count % 1000 == 0) {
+					LOG.info("Writing cluster {}/{}", count, clusters.size());
+				}
+				StringBuilder b = new StringBuilder();
+				Sense sense = cluster.getSense();
+				List<SingleWord> words = sense.getWords();
+				appendSingleWords(b, words);
+				b.append("\t").append(sense.getSenseId()).append("\t");
+				for (int i = 0; i < cluster.getClusterWords().size(); i++) {
+					ClusterWord clusterWord = cluster.getClusterWords().get(i);
+					appendSingleWords(b, clusterWord.getWords());
+					Integer relatedSenseId = clusterWord.getRelatedSenseId();
+					if (relatedSenseId != null) {
+						b.append(relatedSenseId);
+					}
+					Double weight = clusterWord.getWeight();
+					if (weight != null) {
+						b.append(":").append(weight);
+					}
+					if (i < cluster.getClusterWords().size() - 1) {
+						b.append(", ");
+					}
+				}
+				b.append("\n");
+				out.write(b.toString());
+			}
+		}
+
+	}
+
+	private static void appendSingleWords(StringBuilder b, List<SingleWord> words) {
+		for (int i = 0; i < words.size(); i++) {
+			SingleWord word = words.get(i);
+			b.append(word.getText());
+			String pos = word.getPos();
+			if (pos != null) {
+				b.append("#").append(pos);
+			}
+			if (i < words.size() - 1) {
+				b.append(" ");
+			}
+
 		}
 	}
 

@@ -44,7 +44,7 @@ public class WordFrequencyConverter {
 		Map<String, Integer> wordFrequencies = parser.readWordFrequencies(wordFrequenciesFile, InputMode.GZ);
 		Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(input, InputMode.GZ);
 		LOG.info("Filtering clusters, size before: {}", clusters.size());
-		Utils.filterClustersByPosTag(clusters);
+		// Utils.filterClustersByPosTag(clusters);
 		LOG.info("Filtered clusters, size after: {}", clusters.size());
 		int total = clusters.size();
 		int count = 0;

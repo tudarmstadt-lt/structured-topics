@@ -5,9 +5,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,10 +40,11 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Stopwatch;
 
-import de.tudarmstadt.lt.structuredtopics.Feature;
-import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
-import de.tudarmstadt.lt.structuredtopics.Parser;
 import de.tudarmstadt.lt.structuredtopics.Utils;
+import de.tudarmstadt.lt.structuredtopics.ddts.ClusterWord;
+import de.tudarmstadt.lt.structuredtopics.ddts.Parser;
+import de.tudarmstadt.lt.structuredtopics.ddts.Sense;
+import de.tudarmstadt.lt.structuredtopics.ddts.SenseCluster;
 
 public class SenseSimilarityCalculator {
 
@@ -62,10 +62,10 @@ public class SenseSimilarityCalculator {
 		Options options = createOptions();
 		try {
 			CommandLine line = new DefaultParser().parse(options, args, true);
-			File senseClusters = new File(line.getOptionValue(OPTION_IN_FILE));
+			File ddt = new File(line.getOptionValue(OPTION_IN_FILE));
 			File output = new File(line.getOptionValue(OPTION_OUT_FILE));
 			Parser parser = new Parser();
-			Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(senseClusters, InputMode.GZ);
+			List<SenseCluster> clusters = parser.parseDDT(ddt);
 			if (line.hasOption(OPTION_FILTER_POS_TAG)) {
 				LOG.info("Filtering by pos-tag");
 				Utils.filterClustersByPosTag(clusters);
@@ -76,7 +76,7 @@ public class SenseSimilarityCalculator {
 			}
 			Analyzer analyzer = new KeywordAnalyzer();
 			IndexWriterConfig config = new IndexWriterConfig(analyzer);
-			int total = Utils.countSenses(clusters);
+			int total = clusters.size();
 			if (line.hasOption(OPTION_ALL_SIMILARITIES)) {
 				LOG.info("Calculating all similarities");
 				writeAllSimilarities(output, clusters, total);
@@ -105,26 +105,38 @@ public class SenseSimilarityCalculator {
 
 	}
 
-	private static void writeAllSimilarities(File output, Map<String, Map<Integer, List<Feature>>> clusters,
-			int total) {
+	private static void writeAllSimilarities(File output, List<SenseCluster> clusters, int total) {
 		try (BufferedWriter out = Utils.openGzipWriter(output)) {
 			int count = 0;
-			for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
-				String senseWord = cluster.getKey();
-				for (Entry<Integer, List<Feature>> sense : cluster.getValue().entrySet()) {
-					if (count++ % 100 == 0) {
-						LOG.info("Searching similarities for sense {}/{}", count, total);
-					}
-					Integer senseId = sense.getKey();
-					String senseWordId1 = senseWord + "#" + senseId;
-					for (Feature f : sense.getValue()) {
-						String word = f.getWord();
-						Integer wordSenseId = f.getSenseId() == null ? 0 : f.getSenseId();
+			for (SenseCluster cluster : clusters) {
+				Sense sense = cluster.getSense();
+				String senseWord = sense.getFullWord();
+				if (count++ % 100 == 0) {
+					LOG.info("Searching similarities for sense {}/{}", count, total);
+				}
+				Integer senseId = sense.getSenseId();
+				String senseWordId1 = senseWord + "#" + senseId;
+				for (ClusterWord clusterWord : cluster.getClusterWords()) {
+					String word = clusterWord.getFullWord();
+					if (clusterWord.getRelatedSenseId() != null) {
+						Integer wordSenseId = clusterWord.getRelatedSenseId();
 						String senseWordId2 = word + "#" + wordSenseId;
-						double score = f.getWeight();
+						double score = clusterWord.getWeight() == null ? 1 : clusterWord.getWeight();
 						String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
 						out.write(similarity);
 						out.write("\n");
+					} else {
+						// special handling for clusters without sense ids, in
+						// this case the sense is equal to all other senses with
+						// the same id
+						for (Integer id : findSenseIdsWithSameFullWord(clusters, word)) {
+							Integer wordSenseId = id;
+							String senseWordId2 = word + "#" + wordSenseId;
+							double score = clusterWord.getWeight() == null ? 1 : clusterWord.getWeight();
+							String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
+							out.write(similarity);
+							out.write("\n");
+						}
 					}
 				}
 			}
@@ -133,44 +145,51 @@ public class SenseSimilarityCalculator {
 		}
 	}
 
+	private static List<Integer> findSenseIdsWithSameFullWord(List<SenseCluster> clusters, String fullWord) {
+		List<Integer> ids = new ArrayList<>();
+		for (SenseCluster cluster : clusters) {
+			if (cluster.getSense().getFullWord().equals(fullWord)) {
+				ids.add(cluster.getSense().getSenseId());
+			}
+		}
+		return ids;
+	}
+
 	private static void writeLuceneBasedSimilarities(File output, int collectSimilarSensesPerSense,
-			Map<String, Map<Integer, List<Feature>>> clusters, int total, Directory index)
-			throws InterruptedException, IOException {
+			List<SenseCluster> clusters, int total, Directory index) throws InterruptedException, IOException {
 		Stopwatch watch = Stopwatch.createStarted();
 		IndexReader reader = DirectoryReader.open(index);
 		IndexSearcher searcher = new IndexSearcher(reader);
-		CountDownLatch latch = new CountDownLatch(clusters.entrySet().size());
+		CountDownLatch latch = new CountDownLatch(clusters.size());
 		try (BufferedWriter out = Utils.openGzipWriter(output)) {
 			AtomicInteger count = new AtomicInteger();
-			clusters.entrySet().parallelStream().forEach(cluster -> {
+			clusters.parallelStream().forEach(cluster -> {
 				try {
-					String senseWord = cluster.getKey();
-					for (Entry<Integer, List<Feature>> sense : cluster.getValue().entrySet()) {
-						if (count.incrementAndGet() % 100 == 0) {
-							LOG.info("Searching similarities for sense {}/{}", count, total);
+					String senseWord = cluster.getSense().getFullWord();
+					if (count.incrementAndGet() % 100 == 0) {
+						LOG.info("Searching similarities for sense {}/{}", count, total);
+					}
+					Integer senseId = cluster.getSense().getSenseId();
+					String senseWordId1 = senseWord + "#" + senseId;
+					BooleanQuery.Builder builder = new BooleanQuery.Builder();
+					BooleanQuery.setMaxClauseCount(1000000);
+					for (ClusterWord clusterWord : cluster.getClusterWords()) {
+						String word = clusterWord.getFullWord();
+						builder.add(new TermQuery(new Term("sense_cluster_word", word)), Occur.SHOULD);
+					}
+					BooleanQuery query = builder.build();
+					TopDocs result = searcher.search(query, collectSimilarSensesPerSense);
+					for (ScoreDoc s : result.scoreDocs) {
+						String senseWordId2 = reader.document(s.doc).getField("sense_word_id").stringValue();
+						if (senseWordId1.equals(senseWordId2)) {
+							// ignore self-similarity
+							continue;
 						}
-						Integer senseId = sense.getKey();
-						String senseWordId1 = senseWord + "#" + senseId;
-						BooleanQuery.Builder builder = new BooleanQuery.Builder();
-						BooleanQuery.setMaxClauseCount(1000000);
-						for (Feature f : sense.getValue()) {
-							String word = f.getWord();
-							builder.add(new TermQuery(new Term("sense_cluster_word", word)), Occur.SHOULD);
-						}
-						BooleanQuery query = builder.build();
-						TopDocs result = searcher.search(query, collectSimilarSensesPerSense);
-						for (ScoreDoc s : result.scoreDocs) {
-							String senseWordId2 = reader.document(s.doc).getField("sense_word_id").stringValue();
-							if (senseWordId1.equals(senseWordId2)) {
-								// ignore self-similarity
-								continue;
-							}
-							float score = s.score;
-							String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
-							synchronized (out) {
-								out.write(similarity);
-								out.write("\n");
-							}
+						float score = s.score;
+						String similarity = senseWordId1 + "\t" + senseWordId2 + "\t" + score;
+						synchronized (out) {
+							out.write(similarity);
+							out.write("\n");
 						}
 					}
 				} catch (Exception e) {
@@ -187,23 +206,21 @@ public class SenseSimilarityCalculator {
 		}
 	}
 
-	private static void buildIndex(Map<String, Map<Integer, List<Feature>>> clusters, IndexWriterConfig config,
-			int total, RAMDirectory index) throws IOException {
+	private static void buildIndex(List<SenseCluster> clusters, IndexWriterConfig config, int total, RAMDirectory index)
+			throws IOException {
 		try (IndexWriter w = new IndexWriter(index, config)) {
 			int count = 0;
-			for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
-				String senseWord = cluster.getKey();
+			for (SenseCluster cluster : clusters) {
+				String senseWord = cluster.getSense().getFullWord();
 				Document senseDocument = new Document();
-				for (Entry<Integer, List<Feature>> sense : cluster.getValue().entrySet()) {
-					if (count++ % 100 == 0) {
-						LOG.info("indexing sense {}/{}, index size: {} bytes", count, total, index.ramBytesUsed());
-					}
-					Integer senseId = sense.getKey();
-					senseDocument.add(new StringField("sense_word_id", senseWord + "#" + senseId, Store.YES));
-					for (Feature f : sense.getValue()) {
-						String word = f.getWord();
-						senseDocument.add(new StringField("sense_cluster_word", word, Store.NO));
-					}
+				if (count++ % 100 == 0) {
+					LOG.info("indexing sense {}/{}, index size: {} bytes", count, total, index.ramBytesUsed());
+				}
+				Integer senseId = cluster.getSense().getSenseId();
+				senseDocument.add(new StringField("sense_word_id", senseWord + "#" + senseId, Store.YES));
+				for (ClusterWord clusterWord : cluster.getClusterWords()) {
+					String word = clusterWord.getFullWord();
+					senseDocument.add(new StringField("sense_cluster_word", word, Store.NO));
 				}
 				try {
 					w.addDocument(senseDocument);
