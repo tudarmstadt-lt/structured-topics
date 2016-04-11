@@ -36,10 +36,11 @@ import de.tudarmstadt.lt.structuredtopics.Utils;
  * csv.gz file (tab separated). The first column is expected to contain the
  * clusterid, the third column is expected to contain the words of the cluster
  * (comma-separated). The output will be a tab-separated .csv file, containing
- * the clusterid in the first column, the top domains with each score in the
- * second column (domain|score, domain|score), scores for each found domain in
- * the third column (domain|simpleScore|cosineScore, domain|simpleScore...) and
- * all cluster labels in the 4. column (same as from the input format).
+ * the clusterid in the first column, the cluster size in the second column, the
+ * top domains with each score in the third column (domain|score, domain|score),
+ * scores for each found domain in the fourth column
+ * (domain|simpleScore|cosineScore, domain|simpleScore...) and all cluster
+ * labels in the 5th column (same as from the input format).
  *
  */
 public class MapClustersToBabelnetSenses {
@@ -154,8 +155,8 @@ public class MapClustersToBabelnetSenses {
 						topDomains = topSimpleScoreDomain + "|" + df.format(topSimpleScore) + ", "
 								+ topCosineScoreDomain + "|" + df.format(topCosineScore);
 					}
-					String outLine = clusterIndex + "\t" + topDomains + "\t" + scores.toString() + "\t"
-							+ clusterWords.length + "\t" + split[2];
+					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + topDomains + "\t"
+							+ scores.toString() + "\t" + split[2];
 					synchronized (out) {
 						out.write(outLine + "\n");
 					}
