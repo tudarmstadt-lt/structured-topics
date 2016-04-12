@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,6 +63,7 @@ public class SenseSimilarityCalculator {
 	public static void main(String[] args) {
 		Options options = createOptions();
 		try {
+			Stopwatch watch = Stopwatch.createStarted();
 			CommandLine line = new DefaultParser().parse(options, args, true);
 			File ddt = new File(line.getOptionValue(OPTION_IN_FILE));
 			File output = new File(line.getOptionValue(OPTION_OUT_FILE));
@@ -82,16 +85,18 @@ public class SenseSimilarityCalculator {
 				writeAllSimilarities(output, clusters, total);
 			} else if (line.hasOption(OPTION_SIMILAR_SENSES)) {
 				LOG.info("Calculating similarities using index");
-				Stopwatch watch = Stopwatch.createStarted();
+				Stopwatch watch2 = Stopwatch.createStarted();
 				LOG.info("Starting indexing");
 				RAMDirectory index = new RAMDirectory();
 				buildIndex(clusters, config, total, index);
-				LOG.info("Creating index took {}ms", watch.elapsed(TimeUnit.MILLISECONDS));
+				LOG.info("Creating index took {}ms", watch2.elapsed(TimeUnit.MILLISECONDS));
 				int collectSimilarSensesPerSense = Integer.parseInt(line.getOptionValue(OPTION_SIMILAR_SENSES));
 				writeLuceneBasedSimilarities(output, collectSimilarSensesPerSense, clusters, total, index);
 			} else {
 				LOG.error("Missing option, provide either " + OPTION_SIMILAR_SENSES + " or " + OPTION_ALL_SIMILARITIES);
 			}
+			LOG.info("Done, results available at {}, time: {}s", output.getAbsolutePath(),
+					watch.elapsed(TimeUnit.SECONDS));
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments", e);
 			StringWriter sw = new StringWriter();
@@ -145,14 +150,39 @@ public class SenseSimilarityCalculator {
 		}
 	}
 
+	private static Map<String, List<Integer>> fullWordSenseIdIndex;
+	private static List<Integer> NOT_INDEXED = new ArrayList<>();
+	static {
+		NOT_INDEXED.add(0);
+	}
+
 	private static List<Integer> findSenseIdsWithSameFullWord(List<SenseCluster> clusters, String fullWord) {
-		List<Integer> ids = new ArrayList<>();
-		for (SenseCluster cluster : clusters) {
-			if (cluster.getSense().getFullWord().equals(fullWord)) {
-				ids.add(cluster.getSense().getSenseId());
+		if (fullWordSenseIdIndex == null) {
+			LOG.info(
+					"Building full word sense index for {} clusters to generate all similarities without sense ids in cluster words",
+					clusters.size());
+			Stopwatch watch = Stopwatch.createStarted();
+			fullWordSenseIdIndex = new HashMap<>(clusters.size() / 4);
+			for (SenseCluster cluster : clusters) {
+				String senseFullWord = cluster.getSense().getFullWord();
+				Integer senseId = cluster.getSense().getSenseId();
+				List<Integer> ids = fullWordSenseIdIndex.get(senseFullWord);
+				if (ids == null) {
+					ids = new ArrayList<>(4);
+					fullWordSenseIdIndex.put(senseFullWord, ids);
+				}
+				ids.add(senseId);
 			}
+			LOG.info("Full index created in {}s", watch.elapsed(TimeUnit.SECONDS));
 		}
-		return ids;
+		List<Integer> ids = fullWordSenseIdIndex.get(fullWord);
+		if (ids != null) {
+			return ids;
+		} else {
+			// in case the cluster words contain a sense which is not included
+			// in the senses
+			return NOT_INDEXED;
+		}
 	}
 
 	private static void writeLuceneBasedSimilarities(File output, int collectSimilarSensesPerSense,

@@ -5,6 +5,7 @@ import java.util.List;
 public abstract class MultiWord {
 
 	private List<SingleWord> words;
+	private String fullWord = null;
 
 	public MultiWord(List<SingleWord> words) {
 		this.words = words;
@@ -14,20 +15,24 @@ public abstract class MultiWord {
 	 * Returns the text of all words concatenated by whitespace
 	 */
 	public String getFullWord() {
-		if (words.size() > 1) {
-			String full = "";
-			for (int i = 0; i < words.size(); i++) {
-				full += words.get(i);
-				if (i < words.size() - 1) {
-					full += " ";
+		// lazy initialize the field
+		if (fullWord == null) {
+			if (words.size() > 1) {
+				String full = "";
+				for (int i = 0; i < words.size(); i++) {
+					full += words.get(i);
+					if (i < words.size() - 1) {
+						full += " ";
+					}
 				}
+				fullWord = full;
+			} else if (words.size() == 1) {
+				fullWord = words.get(0).getText();
+			} else {
+				fullWord = "";
 			}
-			return full;
-		} else if (words.size() == 1) {
-			return words.get(0).getText();
-		} else {
-			return "";
 		}
+		return fullWord;
 	}
 
 	public List<SingleWord> getWords() {
@@ -36,6 +41,7 @@ public abstract class MultiWord {
 
 	public void setWords(List<SingleWord> word) {
 		this.words = word;
+		fullWord = null;
 	}
 
 	@Override
