@@ -212,7 +212,7 @@ public class Utils {
 					appendSingleWords(b, clusterWord.getWords());
 					Integer relatedSenseId = clusterWord.getRelatedSenseId();
 					if (relatedSenseId != null) {
-						b.append(relatedSenseId);
+						b.append("#").append(relatedSenseId);
 					}
 					Double weight = clusterWord.getWeight();
 					if (weight != null) {
