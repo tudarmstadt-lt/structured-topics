@@ -40,6 +40,7 @@ import org.apache.lucene.store.RAMDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 
 import de.tudarmstadt.lt.structuredtopics.Utils;
@@ -79,19 +80,18 @@ public class SenseSimilarityCalculator {
 			}
 			Analyzer analyzer = new KeywordAnalyzer();
 			IndexWriterConfig config = new IndexWriterConfig(analyzer);
-			int total = clusters.size();
 			if (line.hasOption(OPTION_ALL_SIMILARITIES)) {
 				LOG.info("Calculating all similarities");
-				writeAllSimilarities(output, clusters, total);
+				writeAllSimilarities(output, clusters);
 			} else if (line.hasOption(OPTION_SIMILAR_SENSES)) {
 				LOG.info("Calculating similarities using index");
 				Stopwatch watch2 = Stopwatch.createStarted();
 				LOG.info("Starting indexing");
 				RAMDirectory index = new RAMDirectory();
-				buildIndex(clusters, config, total, index);
+				buildIndex(clusters, config, index);
 				LOG.info("Creating index took {}ms", watch2.elapsed(TimeUnit.MILLISECONDS));
 				int collectSimilarSensesPerSense = Integer.parseInt(line.getOptionValue(OPTION_SIMILAR_SENSES));
-				writeLuceneBasedSimilarities(output, collectSimilarSensesPerSense, clusters, total, index);
+				writeLuceneBasedSimilarities(output, collectSimilarSensesPerSense, clusters, index);
 			} else {
 				LOG.error("Missing option, provide either " + OPTION_SIMILAR_SENSES + " or " + OPTION_ALL_SIMILARITIES);
 			}
@@ -110,8 +110,10 @@ public class SenseSimilarityCalculator {
 
 	}
 
-	private static void writeAllSimilarities(File output, List<SenseCluster> clusters, int total) {
-		try (BufferedWriter out = Utils.openGzipWriter(output)) {
+	@VisibleForTesting
+	protected static void writeAllSimilarities(File output, List<SenseCluster> clusters) {
+		int total = clusters.size();
+		try (BufferedWriter out = Utils.openWriter(output)) {
 			int count = 0;
 			for (SenseCluster cluster : clusters) {
 				Sense sense = cluster.getSense();
@@ -185,13 +187,15 @@ public class SenseSimilarityCalculator {
 		}
 	}
 
+	@VisibleForTesting
 	private static void writeLuceneBasedSimilarities(File output, int collectSimilarSensesPerSense,
-			List<SenseCluster> clusters, int total, Directory index) throws InterruptedException, IOException {
+			List<SenseCluster> clusters, Directory index) throws InterruptedException, IOException {
+		int total = clusters.size();
 		Stopwatch watch = Stopwatch.createStarted();
 		IndexReader reader = DirectoryReader.open(index);
 		IndexSearcher searcher = new IndexSearcher(reader);
 		CountDownLatch latch = new CountDownLatch(clusters.size());
-		try (BufferedWriter out = Utils.openGzipWriter(output)) {
+		try (BufferedWriter out = Utils.openWriter(output)) {
 			AtomicInteger count = new AtomicInteger();
 			clusters.parallelStream().forEach(cluster -> {
 				try {
@@ -236,8 +240,9 @@ public class SenseSimilarityCalculator {
 		}
 	}
 
-	private static void buildIndex(List<SenseCluster> clusters, IndexWriterConfig config, int total, RAMDirectory index)
+	private static void buildIndex(List<SenseCluster> clusters, IndexWriterConfig config, RAMDirectory index)
 			throws IOException {
+		int total = clusters.size();
 		try (IndexWriter w = new IndexWriter(index, config)) {
 			int count = 0;
 			for (SenseCluster cluster : clusters) {

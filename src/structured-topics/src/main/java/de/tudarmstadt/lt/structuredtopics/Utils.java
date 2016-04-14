@@ -96,6 +96,7 @@ public class Utils {
 		return new BufferedWriter(writer);
 	}
 
+	@Deprecated
 	public static BufferedReader openReader(File input, InputMode mode) throws IOException {
 		InputStream in = new FileInputStream(input);
 		if (mode == InputMode.GZ) {
@@ -106,6 +107,7 @@ public class Utils {
 		return new BufferedReader(reader);
 	}
 
+	@Deprecated
 	public static BufferedWriter openGzipWriter(File output) throws IOException {
 		OutputStream out = new FileOutputStream(output);
 		out = new GZIPOutputStream(out);

@@ -20,7 +20,7 @@ public abstract class MultiWord {
 			if (words.size() > 1) {
 				String full = "";
 				for (int i = 0; i < words.size(); i++) {
-					full += words.get(i);
+					full += words.get(i).getText();
 					if (i < words.size() - 1) {
 						full += " ";
 					}
