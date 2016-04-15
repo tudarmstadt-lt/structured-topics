@@ -3,12 +3,15 @@ package de.tudarmstadt.lt.structuredtopics.ddts;
 import static org.apache.commons.lang3.StringUtils.lastIndexOf;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.apache.commons.io.LineIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +47,52 @@ public class Parser {
 			}
 		}
 		return senseClusters;
+	}
+
+	public DDTIterator iterateDDT(File ddt) throws IOException {
+		return new DDTIterator(Utils.openReader(ddt));
+	}
+
+	/**
+	 * Iterates over the senses of an DDT without keeping the entire file in
+	 * memory. The Iterator may return null for some clusters if a line can not
+	 * be parsed from the ddt.
+	 *
+	 */
+	public class DDTIterator implements Iterator<SenseCluster>, Closeable {
+
+		private org.apache.commons.io.LineIterator it;
+
+		private BufferedReader in;
+		private int count = 0;
+
+		public DDTIterator(BufferedReader in) {
+			this.in = in;
+			it = new LineIterator(in);
+		}
+
+		@Override
+		public boolean hasNext() {
+			return it.hasNext();
+		}
+
+		@Override
+		public SenseCluster next() {
+			String line = it.next();
+			count++;
+			try {
+				return parseSenseClusterFromLine(line);
+			} catch (Exception e) {
+				LOG.error("Unexpected error while parsing line {} : {}", count, line, e);
+				return null;
+			}
+		}
+
+		@Override
+		public void close() throws IOException {
+			in.close();
+		}
+
 	}
 
 	@VisibleForTesting

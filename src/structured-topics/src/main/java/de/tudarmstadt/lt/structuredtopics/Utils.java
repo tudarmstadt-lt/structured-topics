@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -244,10 +243,22 @@ public class Utils {
 		}
 	}
 
+	public static int countLines(File file) {
+		int count = 0;
+		try (BufferedReader in = Utils.openReader(file)) {
+			while (in.readLine() != null) {
+				count++;
+			}
+		} catch (IOException e) {
+			return -1;
+		}
+		return count;
+	}
+
 	public static Set<String> loadUniqueLines(File file) {
 		Set<String> set = Sets.newHashSet();
 		if (file.exists()) {
-			try (BufferedReader in = new BufferedReader(new FileReader(file))) {
+			try (BufferedReader in = Utils.openReader(file)) {
 				String line = null;
 				while ((line = in.readLine()) != null) {
 					set.add(line);
