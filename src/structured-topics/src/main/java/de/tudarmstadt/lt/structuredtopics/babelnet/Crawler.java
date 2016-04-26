@@ -172,7 +172,9 @@ public class Crawler {
 						String language = (String) edgeData.get("language");
 						// TODO all languages?
 						if (language.equals("EN")) {
-							queue.add(targetSynset);
+							if (!visitedSynsets.contains(targetSynset)) {
+								queue.add(targetSynset);
+							}
 						}
 					}
 

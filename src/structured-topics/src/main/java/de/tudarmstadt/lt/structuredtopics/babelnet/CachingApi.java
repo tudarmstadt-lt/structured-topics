@@ -138,7 +138,9 @@ public class CachingApi {
 			Map<String, String> parameters = Maps.newHashMap();
 			parameters.put("id", synsetId);
 			String result = callApi(API_GET_EDGES, parameters);
-			Files.write(result, cachedResult, UTF_8);
+			if (!StringUtils.isEmpty(result)) {
+				Files.write(result, cachedResult, UTF_8);
+			}
 			return result;
 		}
 	}
