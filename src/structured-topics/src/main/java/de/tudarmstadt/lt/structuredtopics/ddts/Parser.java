@@ -81,7 +81,8 @@ public class Parser {
 			String line = it.next();
 			count++;
 			try {
-				return parseSenseClusterFromLine(line);
+				SenseCluster senseCluster = parseSenseClusterFromLine(line);
+				return senseCluster;
 			} catch (Exception e) {
 				LOG.error("Unexpected error while parsing line {} : {}", count, line, e);
 				return null;
@@ -106,10 +107,16 @@ public class Parser {
 		try {
 			senseId = Integer.valueOf(columns[1]);
 		} catch (NumberFormatException e) {
-			// some ids were saved in double format. However, this should be the
-			// exception not the default as the conversion from string to double
-			// to integer is more expensive
-			senseId = Double.valueOf(columns[1]).intValue();
+			try {
+				// some ids were saved in double format. However, this should be
+				// the
+				// exception not the default as the conversion from string to
+				// double
+				// to integer is more expensive
+				senseId = Double.valueOf(columns[1]).intValue();
+			} catch (NumberFormatException e2) {
+				return null;
+			}
 		}
 		Sense sense = new Sense(senseWords, senseId);
 		List<ClusterWord> cluster = parseClusterWords(columns[2]);
@@ -147,7 +154,12 @@ public class Parser {
 			// multi-words are separated by whitespace
 			for (String wordRaw : wordsRaw.split("\\s+")) {
 				String[] sections = wordRaw.split("[#]");
-				String text = sections[0];
+				String text;
+				if (sections.length <= 1) {
+					text = wordRaw;
+				} else {
+					text = sections[0];
+				}
 				String pos = null;
 				for (int i = 1; i < sections.length; i++) {
 					String section = sections[i];
