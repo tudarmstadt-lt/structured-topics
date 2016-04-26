@@ -31,18 +31,6 @@ import com.google.common.collect.Maps;
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 import de.tudarmstadt.lt.structuredtopics.Utils;
 
-/**
- * Rates clusters of words to babelnet senses. The clusters should be in a
- * csv.gz file (tab separated). The first column is expected to contain the
- * clusterid, the third column is expected to contain the words of the cluster
- * (comma-separated). The output will be a tab-separated .csv file, containing
- * the clusterid in the first column, the cluster size in the second column, the
- * top domains with each score in the third column (domain|score, domain|score),
- * scores for each found domain in the fourth column
- * (domain|simpleScore|cosineScore, domain|simpleScore...) and all cluster
- * labels in the 5th column (same as from the input format).
- *
- */
 public class MapClustersToBabelnetSenses {
 
 	private static final Logger LOG = LoggerFactory.getLogger(MapClustersToBabelnetSenses.class);
@@ -94,7 +82,7 @@ public class MapClustersToBabelnetSenses {
 				Double weight = Double.valueOf(split[1]);
 				// TODO negative domain weight on babelnet, how to handle?
 				if (weight < 0) {
-					weight = 0.01;
+					weight = 1.0;
 				} else if (weight > 1) {
 					weight = 1.0;
 				}
@@ -105,6 +93,9 @@ public class MapClustersToBabelnetSenses {
 				for (String s : senseWords) {
 					domainSenses.put(s.toLowerCase(), weight);
 				}
+				// also put the entire word separated by whitespace for
+				// multiword mappings
+				domainSenses.put(sense.toLowerCase().replace('_', ' '), weight);
 			}
 		}
 		return domains;
@@ -127,13 +118,16 @@ public class MapClustersToBabelnetSenses {
 					int clusterIndex = Integer.parseInt(split[0]);
 					String[] clusterWords = split[2].split(",\\s*");
 					removeTagAndIndex(clusterWords);
-					StringBuilder scores = new StringBuilder();
 					double topSimpleScore = 0;
 					String topSimpleScoreDomain = "";
 					double topCosineScore = 0;
 					String topCosineScoreDomain = "";
+					double topPurityScore = 0;
+					String topPurityScoreDomain = "";
+					double totalOverlap = 0;
 
 					for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
+						totalOverlap += overlap(domain.getValue(), clusterWords);
 						String domainName = domain.getKey();
 						double simpleScore = scoreSimple(domain.getValue(), clusterWords);
 						if (simpleScore > topSimpleScore) {
@@ -145,18 +139,19 @@ public class MapClustersToBabelnetSenses {
 							topCosineScore = cosineScore;
 							topCosineScoreDomain = domainName;
 						}
-						if (simpleScore != 0 || cosineScore != 0) {
-							scores.append(domainName).append("|").append(df.format(simpleScore)).append("|")
-									.append(df.format(cosineScore)).append(", ");
+						double purityScore = scoreSimpleWeighted(domain.getValue(), clusterWords);
+						if (purityScore > topPurityScore) {
+							topPurityScore = purityScore;
+							topPurityScoreDomain = domainName;
 						}
 					}
 					String topDomains = "";
-					if (topSimpleScore != 0 || topCosineScore != 0) {
-						topDomains = topSimpleScoreDomain + "|" + df.format(topSimpleScore) + ", "
-								+ topCosineScoreDomain + "|" + df.format(topCosineScore);
-					}
-					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + topDomains + "\t"
-							+ scores.toString() + "\t" + split[2];
+					topDomains += topPurityScoreDomain + "\t" + df.format(topPurityScore) + "\t";
+					topDomains += topSimpleScoreDomain + "\t" + df.format(topSimpleScore) + "\t";
+					topDomains += topCosineScoreDomain + "\t" + df.format(topCosineScore);
+
+					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + ((int) totalOverlap) + "\t"
+							+ topDomains + "\t" + split[2];
 					synchronized (out) {
 						out.write(outLine + "\n");
 					}
@@ -193,6 +188,23 @@ public class MapClustersToBabelnetSenses {
 				clusterWords[i] = word.substring(0, firstHash);
 			}
 		}
+	}
+
+	/*
+	 * weighted simple score: score multiplied by the ln of the cluster size.
+	 */
+	private static double scoreSimpleWeighted(Map<String, Double> index, String[] clusterWords) {
+		return scoreSimple(index, clusterWords) * Math.log(clusterWords.length);
+	}
+
+	private static double overlap(Map<String, Double> index, String[] clusterWords) {
+		int hits = 0;
+		for (String word : clusterWords) {
+			if (index.containsKey(word.toLowerCase())) {
+				hits++;
+			}
+		}
+		return hits;
 	}
 
 	/*

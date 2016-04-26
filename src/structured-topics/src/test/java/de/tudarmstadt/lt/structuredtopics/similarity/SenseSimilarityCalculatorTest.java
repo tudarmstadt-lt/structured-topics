@@ -42,4 +42,22 @@ public class SenseSimilarityCalculatorTest {
 		assertThat(similarities, is(expectedSimilarities));
 	}
 
+	@Test
+	public void testUnknownRelatedSenses() throws IOException {
+		File ddt = folder.newFile("ddt.csv");
+		String lines = "wordA#POS" + TAB + "0" + TAB + "wordB#POS\n";
+		lines += "wordB#POS" + TAB + "0" + TAB + "wordC#POS\n";
+		lines += "wordB#POS" + TAB + "1" + TAB + "wordD#POS\n";
+		Files.write(lines, ddt, Charsets.UTF_8);
+		File similaritiesFile = folder.newFile("sim.csv");
+
+		SenseSimilarityCalculator.writeAllSimilarities(similaritiesFile, ddt);
+
+		List<String> expectedSimilarities = Lists.newArrayList("wordA#0\twordB#0\t1.0", "wordA#0\twordB#1\t1.0",
+				"wordB#0\twordC#0\t1.0", "wordB#1\twordD#0\t1.0");
+
+		List<String> similarities = Files.readLines(similaritiesFile, Charsets.UTF_8);
+		assertThat(similarities, is(expectedSimilarities));
+	}
+
 }

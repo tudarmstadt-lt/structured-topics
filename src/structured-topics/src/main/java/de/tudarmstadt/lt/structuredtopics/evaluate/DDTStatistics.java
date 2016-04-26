@@ -1,11 +1,9 @@
 package de.tudarmstadt.lt.structuredtopics.evaluate;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
@@ -14,14 +12,19 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.apache.commons.lang3.builder.ReflectionToStringBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Sets;
 
-import de.tudarmstadt.lt.structuredtopics.Feature;
-import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
-import de.tudarmstadt.lt.structuredtopics.Parser;
+import de.tudarmstadt.lt.structuredtopics.ddts.ClusterWord;
+import de.tudarmstadt.lt.structuredtopics.ddts.Parser;
+import de.tudarmstadt.lt.structuredtopics.ddts.Parser.DDTIterator;
+import de.tudarmstadt.lt.structuredtopics.ddts.Sense;
+import de.tudarmstadt.lt.structuredtopics.ddts.SenseCluster;
 
 /**
  * Prints different statistics for a dtt to the log.
@@ -37,16 +40,14 @@ public class DDTStatistics {
 		Options options = createOptions();
 		try {
 			CommandLine cl = new DefaultParser().parse(options, args, true);
-			File in = new File(cl.getOptionValue(OPTION_DDT));
-			if (!in.exists()) {
-				LOG.error("File not found: {}", in.getAbsolutePath());
+			File ddt = new File(cl.getOptionValue(OPTION_DDT));
+			if (!ddt.exists()) {
+				LOG.error("File not found: {}", ddt.getAbsolutePath());
 				return;
 			}
-			Parser parser = new Parser();
-			Map<String, Map<Integer, List<Feature>>> clusters = parser.readClusters(in, InputMode.GZ);
 			StringBuilder b = new StringBuilder();
-			printStatistics(clusters, b);
-			LOG.info("Statistics for {}:\n{}", in.getAbsolutePath(), b.toString());
+			printStatistics(ddt, b);
+			LOG.info("Statistics for {}:\n{}", ddt.getAbsolutePath(), b.toString());
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments: {}", e.getMessage());
 			StringWriter sw = new StringWriter();
@@ -59,25 +60,44 @@ public class DDTStatistics {
 		}
 	}
 
-	private static void printStatistics(Map<String, Map<Integer, List<Feature>>> clusters, StringBuilder b) {
-		b.append("Unique sense words: " + clusters.size() + "\n");
+	public static DDTStats collectStats(File ddt) {
 		int totalSenses = 0;
-		for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
-			totalSenses += cluster.getValue().size();
-		}
-		b.append("Total senses: " + totalSenses + "\n");
-		Set<String> uniqueWords = Sets.newHashSetWithExpectedSize(clusters.size() * 1000);
-		int totalWords = 0;
-		for (Entry<String, Map<Integer, List<Feature>>> cluster : clusters.entrySet()) {
-			for (Entry<Integer, List<Feature>> sense : cluster.getValue().entrySet()) {
-				totalWords += sense.getValue().size();
-				for (Feature f : sense.getValue()) {
-					uniqueWords.add(f.getWord());
+		int totalClusterWords = 0;
+		Set<String> uniqueSenseWords = Sets.newHashSetWithExpectedSize(1000 * 1000);
+		Set<String> uniqueClusterWords = Sets.newHashSetWithExpectedSize(1000 * 1000);
+		try (DDTIterator it = new Parser().iterateDDT(ddt)) {
+			while (it.hasNext()) {
+				SenseCluster cluster = it.next();
+				if (cluster == null) {
+					continue;
+				}
+				Sense sense = cluster.getSense();
+				uniqueSenseWords.add(sense.getFullWord());
+				totalSenses++;
+				totalClusterWords += cluster.getClusterWords().size();
+				for (ClusterWord clusterWord : cluster.getClusterWords()) {
+					uniqueClusterWords.add(clusterWord.getFullWord());
 				}
 			}
+		} catch (IOException e) {
+			LOG.error("Error", e);
 		}
-		b.append("Unique words: " + uniqueWords.size() + "\n");
-		b.append("Total words: " + totalWords + "\n");
+		DDTStats stats = new DDTStats();
+		stats.totalSenses = totalSenses;
+		stats.totalClusterWords = totalClusterWords;
+		stats.uniqueClusterWords = uniqueClusterWords.size();
+		stats.uniqueSenseWords = uniqueSenseWords.size();
+		stats.averageClusterSize = (double) totalClusterWords / totalSenses;
+		return stats;
+	}
+
+	private static void printStatistics(File ddt, StringBuilder b) {
+		DDTStats stats = collectStats(ddt);
+		b.append("Total senses: " + stats.totalSenses + "\n");
+		b.append("Unique sense words: " + stats.uniqueSenseWords + "\n");
+		b.append("Total cluster words: " + stats.totalClusterWords + "\n");
+		b.append("Unique cluster words: " + stats.uniqueClusterWords + "\n");
+		b.append("Average cluster size: " + stats.averageClusterSize);
 	}
 
 	private static Options createOptions() {
@@ -86,4 +106,28 @@ public class DDTStatistics {
 		options.addOption(ddt);
 		return options;
 	}
+
+	public static class DDTStats {
+		public int totalSenses;
+		public int uniqueSenseWords;
+		public int totalClusterWords;
+		public int uniqueClusterWords;
+		public double averageClusterSize;
+
+		@Override
+		public String toString() {
+			return ReflectionToStringBuilder.toString(this);
+		}
+
+		@Override
+		public int hashCode() {
+			return HashCodeBuilder.reflectionHashCode(this);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return EqualsBuilder.reflectionEquals(this, obj);
+		}
+	}
+
 }

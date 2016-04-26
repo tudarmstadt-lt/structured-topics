@@ -1,33 +1,27 @@
 #!/bin/bash
 
-#directory where folders will be generated and files are located.
-#this directory should contain a folder 1_ddts where ddts are located and a file foundSenses.csv with all babelnet senses to use
-BASEDIR="$HOME/experiment2"
-
-#java and jar locations
-RUN_JAVA=~/jdk8/jdk1.8.0_60/bin/java
-RUN_ST_JAR='-Xms4G -Xmx25G -cp /home/haftstein/pipeline/jars/structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar'
-RUN_CW_JAR='-Xms4G -Xmx25G -cp /home/haftstein/pipeline/jars/chinese-whispers.jar'
-
-#options used by the cw clustering
-CW_OPTIONS=("TOP" "DIST_NOLOG" "DIST_LOG")
-
-##no modifications below this line should be necessary
-
 #ensure sort order
 export LC_ALL=C
 
-export _JAVA_OPTIONS=-Djava.io.tmpdir=/home/haftstein/tmp
+EXPERIMENT_DIR=~/experiment2
 
-LOG_DIR=$BASEDIR/0_logs
-DDT_DIR=$BASEDIR/1_ddts
-SIM_DIR=$BASEDIR/2_similarities
-CLUSTER_DIR=$BASEDIR/3_clusters
-MAPPING_DIR=$BASEDIR/4_mappings
-BNET_SENSES=$BASEDIR/foundSenses.csv
+LOG_DIR=$EXPERIMENT_DIR/0_logs
+DDT_DIR=$EXPERIMENT_DIR/1_ddts
+SIM_DIR=$EXPERIMENT_DIR/2_similarities
+CLUSTER_DIR=$EXPERIMENT_DIR/3_clusters
+MAPPING_DIR=$EXPERIMENT_DIR/4_mappings
+BNET_SENSES=$EXPERIMENT_DIR/foundSenses.csv
+RESULT_FILE=$EXPERIMENT_DIR/results_aggregated.csv
+
+RUN_ST_JAR='-Xms4G -Xmx30G -cp /path/to/structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar'
+RUN_CW_JAR='-Xms4G -Xmx30G -cp /path/to/chinese-whispers.jar'
+
+CW_OPTIONS=("TOP" "DIST_NOLOG" "DIST_LOG")
+
 
 rm -r $LOG_DIR
 mkdir $LOG_DIR
+
 
 ### Similarities ###
 
@@ -45,12 +39,12 @@ do
 	java ${RUN_ST_JAR} \
 	de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
 	-in $ddt \
-	-out "$SIM_DIR/$simFile.tmp" \
+	-out "$SIM_DIR/$simFile.tmp.gz" \
 	-ALL 2>&1 | tee $LOG_DIR/"$simFile.log.txt"
 
 	echo "sorting"
-	zcat "$SIM_DIR/$simFile.tmp" | sort -k1,1 -k3,3rg | gzip -9 > "$SIM_DIR/$simFile"
-	rm "$SIM_DIR/$simFile.tmp"
+	zcat "$SIM_DIR/$simFile.tmp.gz" | sort -k1,1 -k3,3rg | gzip -9 > "$SIM_DIR/$simFile"
+	rm "$SIM_DIR/$simFile.tmp.gz"
 
 
         simFile2=lucene-similarities-$name
@@ -58,12 +52,12 @@ do
         java ${RUN_ST_JAR} \
         de.tudarmstadt.lt.structuredtopics.similarity.SenseSimilarityCalculator \
         -in $ddt \
-        -out "$SIM_DIR/$simFile2.tmp" \
+        -out "$SIM_DIR/$simFile2.tmp.gz" \
         -N 100 2>&1 | tee $LOG_DIR/"$simFile2.log.txt"
 
         echo "sorting"
-        zcat "$SIM_DIR/$simFile2.tmp" | sort -k1,1 -k3,3rg | gzip -9 > "$SIM_DIR/$simFile2"
-        rm "$SIM_DIR/$simFile2.tmp"
+        zcat "$SIM_DIR/$simFile2.tmp.gz" | sort -k1,1 -k3,3rg | gzip -9 > "$SIM_DIR/$simFile2"
+	rm "$SIM_DIR/$simFile2.tmp.gz"
 
 
 done
@@ -102,6 +96,8 @@ do
 
 done
 
+
+
 ### Mappings ###
 
 rm -r $MAPPING_DIR
@@ -120,9 +116,23 @@ do
 	de.tudarmstadt.lt.structuredtopics.evaluate.MapClustersToBabelnetSenses \
 	-bnetSenses $BNET_SENSES \
 	-clusters $cluster \
-	-out $MAPPING_DIR/$mappingFile 2>&1 | tee $LOG_DIR/$mappingFile.log
+	-out $MAPPING_DIR/$mappingFile".tmp.gz" 2>&1 | tee $LOG_DIR/$mappingFile.log
+
+	echo "sorting mappings"
+	zcat $MAPPING_DIR/$mappingFile".tmp.gz" | sort -k3,3rn | gzip -9 > $MAPPING_DIR/$mappingFile
+	rm $MAPPING_DIR/$mappingFile".tmp.gz"
 
 done
+
+
+echo "aggregating results"
+rm $RESULT_FILE
+
+java ${RUN_ST_JAR} \
+de.tudarmstadt.lt.structuredtopics.evaluate.Experiment2ResultAggregator \
+-resultDir $EXPERIMENT_DIR \
+-out $RESULT_FILE
+
 
 
 echo "Finished!"
