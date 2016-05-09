@@ -69,7 +69,7 @@ public class Experiment2ResultAggregator {
 		LOG.info("Writing results to {}", resultFile.getAbsolutePath());
 		try (BufferedWriter out = Utils.openWriter(resultFile)) {
 			out.write(
-					"ddtName,filtered,totalSenses,uniqueSenseWords,totalClusterWords,uniqueClusterWords,averageClusterSize,similarityMetric,numberOfEdges,cwOption,numberOfClusters,totalOverlap,maxCosineScore,totalCosineScore\n");
+					"ddtName,filtered,totalSenses,uniqueSenseWords,totalClusterWords,uniqueClusterWords,averageClusterSize,similarityMetric,numberOfEdges,cwOption,numberOfClusters,maxOverlap,avgOverlap,totalOverlap,maxCosineScore,totalCosineScore\n");
 			for (Entry<String, Map<Boolean, Map<String, Map<String, MappingStats>>>> e : mappingsStats.entrySet()) {
 				String ddtName = e.getKey();
 				for (Entry<Boolean, Map<String, Map<String, MappingStats>>> e2 : e.getValue().entrySet()) {
@@ -88,9 +88,10 @@ public class Experiment2ResultAggregator {
 										+ ddtStat.uniqueSenseWords + "," + ddtStat.totalClusterWords + ","
 										+ ddtStat.uniqueClusterWords + "," + ddtStat.averageClusterSize + ","
 										+ similarityMetric + "," + numberOfEdges + "," + cwOption + ","
-										+ numberOfClusters + "," + stats.totalOverlap + ","
-										+ df.format(stats.maxCosineScore) + "," + df.format(stats.totalCosineScore)
-										+ "\n";
+										+ numberOfClusters + "," + df.format(stats.maxOverlap) + ","
+										+ df.format(stats.totalOverlap / numberOfClusters) + ","
+										+ df.format(stats.totalOverlap) + "," + df.format(stats.maxCosineScore) + ","
+										+ df.format(stats.totalCosineScore) + "\n";
 								out.write(line);
 							} catch (Exception ex) {
 								LOG.error(
@@ -217,14 +218,17 @@ public class Experiment2ResultAggregator {
 	}
 
 	private static MappingStats calculateStatsForMapping(File mappings) {
-		int totalOverlap = 0;
+		double totalOverlap = 0;
+		double maxOverlap = 0;
 		double totalCosineScore = 0;
 		double maxCosineScore = 0;
 		try (BufferedReader in = Utils.openReader(mappings)) {
 			String line = null;
 			while ((line = in.readLine()) != null) {
 				String[] columns = line.split("\\t");
-				totalOverlap += Integer.parseInt(columns[2]);
+				double overlap = Double.parseDouble(columns[2]);
+				maxOverlap = Math.max(maxOverlap, overlap);
+				totalOverlap += overlap;
 				double cosineScore = Double.parseDouble(columns[8]);
 				maxCosineScore = Math.max(maxCosineScore, cosineScore);
 				totalCosineScore += cosineScore;
@@ -234,6 +238,7 @@ public class Experiment2ResultAggregator {
 		}
 		MappingStats stats = new MappingStats();
 		stats.totalOverlap = totalOverlap;
+		stats.maxOverlap = maxOverlap;
 		stats.totalCosineScore = totalCosineScore;
 		stats.maxCosineScore = maxCosineScore;
 		return stats;
@@ -260,7 +265,8 @@ public class Experiment2ResultAggregator {
 
 		public double maxCosineScore;
 		public double totalCosineScore;
-		public int totalOverlap;
+		public double totalOverlap;
+		public double maxOverlap;
 
 		@Override
 		public String toString() {

@@ -2,6 +2,7 @@ package de.tudarmstadt.lt.structuredtopics.babelnet;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -32,7 +33,6 @@ public class DownloadImages {
 	private static final String OPTION_DOWNLOAD_LIST = "downloadList";
 	private static final String OPTION_TARGET_DIR = "downloadTo";
 	private static final int IO_TIMEOUT = (int) TimeUnit.SECONDS.toMillis(30);
-	private static final int SLEEP_BETWEEN_CONNECTIONS = (int) TimeUnit.SECONDS.toMillis(5);
 
 	private static final Logger LOG = LoggerFactory.getLogger(DownloadImages.class);
 
@@ -67,15 +67,14 @@ public class DownloadImages {
 
 	private static void downloadImages(File downloadList, File out) {
 		try (BufferedReader in = Utils.openReader(downloadList)) {
-			String line = null;
-			while ((line = in.readLine()) != null) {
+			in.lines().parallel().forEach(line -> {
 				String[] split = line.split("\\t");
 				if (split.length != 2) {
-					continue;
+					return;
 				}
 				String synsetId = split[0];
 				if (StringUtils.isBlank(synsetId)) {
-					continue;
+					return;
 				}
 				String[] imageUrls = split[1].split(", ");
 				for (String imageUrl : imageUrls) {
@@ -103,15 +102,21 @@ public class DownloadImages {
 						connection.setReadTimeout(IO_TIMEOUT);
 						try (InputStream imageIn = connection.getInputStream()) {
 							Files.copy(imageIn, imageFile.toPath());
-							Thread.sleep(SLEEP_BETWEEN_CONNECTIONS);
 						}
 					} catch (MalformedURLException e) {
 						// ignore
+					} catch (FileNotFoundException e) {
+						LOG.error("Image {} does not exist", imageUrl, e);
 					} catch (Exception e) {
 						LOG.error("Error while downloading image Url {}", imageUrl, e);
+						try {
+							Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+						} catch (InterruptedException e1) {
+							// ignore
+						}
 					}
 				}
-			}
+			});
 		} catch (IOException e) {
 			LOG.error("Error", e);
 		}

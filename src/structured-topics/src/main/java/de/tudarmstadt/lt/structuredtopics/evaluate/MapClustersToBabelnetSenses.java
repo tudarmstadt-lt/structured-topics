@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
-import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 import de.tudarmstadt.lt.structuredtopics.Utils;
 
 public class MapClustersToBabelnetSenses {
@@ -104,7 +103,7 @@ public class MapClustersToBabelnetSenses {
 	private static void scoreAndWriteClusters(File clusters, Map<String, Map<String, Double>> index, File outFile) {
 		DecimalFormat df = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 		df.setMaximumFractionDigits(340);
-		try (BufferedWriter out = Utils.openGzipWriter(outFile)) {
+		try (BufferedWriter out = Utils.openWriter(outFile)) {
 			List<String> lines = readLines(clusters);
 			int size = lines.size();
 			AtomicInteger count = new AtomicInteger();
@@ -124,10 +123,13 @@ public class MapClustersToBabelnetSenses {
 					String topCosineScoreDomain = "";
 					double topPurityScore = 0;
 					String topPurityScoreDomain = "";
-					double totalOverlap = 0;
+					double topOverlap = 0;
 
 					for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
-						totalOverlap += overlap(domain.getValue(), clusterWords);
+						double overlap = overlap(domain.getValue(), clusterWords);
+						if (overlap > topOverlap) {
+							topOverlap = overlap;
+						}
 						String domainName = domain.getKey();
 						double simpleScore = scoreSimple(domain.getValue(), clusterWords);
 						if (simpleScore > topSimpleScore) {
@@ -150,7 +152,7 @@ public class MapClustersToBabelnetSenses {
 					topDomains += topSimpleScoreDomain + "\t" + df.format(topSimpleScore) + "\t";
 					topDomains += topCosineScoreDomain + "\t" + df.format(topCosineScore);
 
-					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + ((int) totalOverlap) + "\t"
+					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + df.format(topOverlap) + "\t"
 							+ topDomains + "\t" + split[2];
 					synchronized (out) {
 						out.write(outLine + "\n");
@@ -171,7 +173,7 @@ public class MapClustersToBabelnetSenses {
 
 	private static List<String> readLines(File clusters) throws IOException {
 		List<String> lines = Lists.newArrayList();
-		try (BufferedReader in = Utils.openReader(clusters, InputMode.GZ)) {
+		try (BufferedReader in = Utils.openReader(clusters)) {
 			String line = null;
 			while ((line = in.readLine()) != null) {
 				lines.add(line);
@@ -204,7 +206,7 @@ public class MapClustersToBabelnetSenses {
 				hits++;
 			}
 		}
-		return hits;
+		return (double) hits / clusterWords.length;
 	}
 
 	/*

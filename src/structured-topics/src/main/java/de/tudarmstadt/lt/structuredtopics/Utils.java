@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,20 +38,26 @@ public class Utils {
 	private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
 
 	private static interface Filter {
-		boolean filter(String word);
+		boolean filter(List<SingleWord> words);
 	}
 
 	protected static class PosTagFilter implements Filter {
-		private static final Set<String> POS_TAG_WHITELIST = Sets.newHashSet("NN", "NP", "JJ");
+
+		private Set<String> tags;
+
+		public PosTagFilter(Set<String> tags) {
+			this.tags = tags;
+		}
 
 		@Override
-		public boolean filter(String word) {
-			for (String tag : POS_TAG_WHITELIST) {
-				if (word.endsWith(tag)) {
-					return false;
-				}
+		public boolean filter(List<SingleWord> words) {
+			for (String tag : tags) {
+				for (SingleWord w : words)
+					if (!tag.equalsIgnoreCase(w.getPos())) {
+						return true;
+					}
 			}
-			return true;
+			return false;
 		}
 	}
 
@@ -63,16 +70,21 @@ public class Utils {
 		}
 
 		@Override
-		public boolean filter(String word) {
-			int indexOfFirstHash = word.indexOf("#");
-			if (indexOfFirstHash != -1) {
-				String withoutPosTag = word.substring(0, indexOfFirstHash);
-				matcher.reset(withoutPosTag);
-			} else {
-				matcher.reset(word);
+		public boolean filter(List<SingleWord> words) {
+			for (SingleWord cw : words) {
+				String word = cw.getText();
+				int indexOfFirstHash = word.indexOf("#");
+				if (indexOfFirstHash != -1) {
+					String withoutPosTag = word.substring(0, indexOfFirstHash);
+					matcher.reset(withoutPosTag);
+				} else {
+					matcher.reset(word);
+				}
+				if (!matcher.matches()) {
+					return true;
+				}
 			}
-			boolean filter = !matcher.matches();
-			return filter;
+			return false;
 		}
 
 	}
@@ -115,11 +127,9 @@ public class Utils {
 		return new BufferedWriter(writer);
 	}
 
-	public static void filterClustersByPosTag(List<SenseCluster> clusters) {
-		LOG.info("Filtering by POS-Tag");
-		// TODO implement filtering for multiwords
-		LOG.warn("Filtering POS_Tag for multiwords will only check the tag of the last word");
-		filterClusters(clusters, new PosTagFilter());
+	public static void filterClustersByPosTag(List<SenseCluster> clusters, Set<String> tags) {
+		LOG.info("Filtering by POS-Tag {}", StringUtils.join(tags));
+		filterClusters(clusters, new PosTagFilter(tags));
 	}
 
 	public static void filterClustersByRegEx(List<SenseCluster> clusters, String regex) {
@@ -135,22 +145,22 @@ public class Utils {
 				LOG.info("Filtering cluster {}/{}", clusters.size() - 1 - i, clusters.size());
 			}
 			SenseCluster cluster = clusters.get(i);
-			String senseWord = cluster.getSense().getFullWord();
+			Sense sense = cluster.getSense();
 			boolean keepSenseWord = false;
 			try {
-				if (!filter.filter(senseWord)) {
+				if (!filter.filter(sense.getWords())) {
 					keepSenseWord = true;
 				}
 			} catch (Exception e) {
 				LOG.error("Filter {} threw an exeption while filtering word {}. Word will be removed",
-						filter.getClass(), senseWord, e);
+						filter.getClass(), sense.getFullWord(), e);
 			}
 			if (keepSenseWord) {
 				// filter cluster words
 				List<ClusterWord> clusterWords = cluster.getClusterWords();
 				for (int j = clusterWords.size() - 1; j >= 0; j--) {
 					ClusterWord clusterWord = clusterWords.get(j);
-					if (filter.filter(clusterWord.getFullWord())) {
+					if (filter.filter(clusterWord.getWords())) {
 						clusterWords.remove(j);
 						removedClusterWords++;
 					}
