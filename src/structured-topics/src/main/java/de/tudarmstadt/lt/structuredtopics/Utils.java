@@ -12,6 +12,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -24,8 +25,6 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Sets;
 
 import de.tudarmstadt.lt.structuredtopics.Main.InputMode;
 import de.tudarmstadt.lt.structuredtopics.ddts.ClusterWord;
@@ -265,8 +264,8 @@ public class Utils {
 		return count;
 	}
 
-	public static Set<String> loadUniqueLines(File file) {
-		Set<String> set = Sets.newHashSet();
+	public static LinkedHashSet<String> loadUniqueLines(File file) {
+		LinkedHashSet<String> set = new LinkedHashSet<>();
 		if (file.exists()) {
 			try (BufferedReader in = Utils.openReader(file)) {
 				String line = null;

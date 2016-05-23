@@ -6,12 +6,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -37,7 +39,6 @@ public class Crawler {
 
 	private static final String OPTION_API_KEY = "key";
 	private static final String OPTION_STARTING_SYNSETS = "synsetStart";
-	private static final String OPTION_MAX_STEPS = "steps";
 	private static final String OPTION_FOUND_SENSES_FILE = "out";
 	private static final String OPTION_VISITED_SYNSETS_FILE = "visited";
 	private static final String OPTION_QUEUE = "queue";
@@ -57,13 +58,12 @@ public class Crawler {
 			File cacheLocation = new File(cl.getOptionValue(OPTION_API_CACHE));
 			Crawler crawler = new Crawler(cacheLocation, cl.getOptionValue(OPTION_API_KEY));
 			Set<String> startingSynsets = Sets.newHashSet(cl.getOptionValue(OPTION_STARTING_SYNSETS).split(","));
-			int maxSteps = Integer.valueOf(cl.getOptionValue(OPTION_MAX_STEPS));
 			File out = new File(cl.getOptionValue(OPTION_FOUND_SENSES_FILE));
 			File queue = new File(cl.getOptionValue(OPTION_QUEUE));
 			File visited = new File(cl.getOptionValue(OPTION_VISITED_SYNSETS_FILE));
 			boolean cleanSenses = cl.hasOption(OPTION_CLEAN_SENSES);
-			LOG.info("Crawling synsets {} with maxSteps {}", startingSynsets, maxSteps);
-			crawler.crawl(startingSynsets, maxSteps, out, queue, visited, cleanSenses);
+			LOG.info("Crawling synsets {} with maxSteps {}", startingSynsets);
+			crawler.crawl(startingSynsets, out, queue, visited, cleanSenses);
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments: {}", e.getMessage());
 			StringWriter sw = new StringWriter();
@@ -85,10 +85,6 @@ public class Crawler {
 				.desc("csv list of ids of the synsets to start with, e.g. 'bn:00048043n,bn:00004625n'").hasArg()
 				.build();
 		options.addOption(labeledClusters);
-		Option steps = Option.builder(OPTION_MAX_STEPS).argName("max steps")
-				.desc("Number of steps to perform. Each step will expand one synset (up to 2 api-calls)").hasArg()
-				.required().build();
-		options.addOption(steps);
 		Option out = Option.builder(OPTION_FOUND_SENSES_FILE).argName("out")
 				.desc("File where the found senses will be appended (one per line)").hasArg().required().build();
 		options.addOption(out);
@@ -111,25 +107,22 @@ public class Crawler {
 	}
 
 	@SuppressWarnings("rawtypes")
-	private void crawl(Set<String> startingSynsetsId, int maxSteps, File outFile, File queueFile, File visitedFile,
+	private void crawl(Set<String> startingSynsetsId, File outFile, File queueFile, File visitedFile,
 			boolean cleanSenses) {
-		Set<String> visitedSynsets = Utils.loadUniqueLines(visitedFile);
-		LinkedHashSet<String> queue = Sets.newLinkedHashSet(Utils.loadUniqueLines(queueFile));
+		LinkedHashSet<String> visitedSynsets = Utils.loadUniqueLines(visitedFile);
+		LinkedHashSet<String> queue = Utils.loadUniqueLines(queueFile);
 		queue.addAll(startingSynsetsId);
 		Set<String> foundDomains = Sets.newHashSet();
-		int step = 0;
 		int countFoundSenses = 0;
 		String currentSynsetId = null;
 		try (BufferedWriter out = new BufferedWriter(new FileWriter(outFile, true))) {
-			while (!queue.isEmpty() && step < maxSteps) {
+			while (!queue.isEmpty()) {
 				Iterator<String> it = queue.iterator();
 				currentSynsetId = it.next();
 				it.remove();
 				if (!visitedSynsets.add(currentSynsetId)) {
 					LOG.info("Skipping {}, already visited", currentSynsetId);
 				} else {
-					// only count a step if a new synset will be expanded
-					step++;
 					String synset = api.getSynset(currentSynsetId);
 					if (StringUtils.isEmpty(synset)) {
 						LOG.error("Empty response from api for synset {}, putting it at end of queue", currentSynsetId);
@@ -139,9 +132,23 @@ public class Crawler {
 					}
 					Gson gson = new GsonBuilder().create();
 					Map json = (Map) gson.fromJson(synset, Object.class);
+					Set<String> allSenses = new HashSet<>();
 					String mainSense = (String) json.get("mainSense");
-					if (mainSense == null) {
-						LOG.error("Empty main sense in synset {}", currentSynsetId);
+					if (mainSense != null) {
+						allSenses.add(mainSense);
+					}
+					List senses = (List) json.get("senses");
+					for (Object sense : senses) {
+						String simpleLemma = (String) ((Map) sense).get("simpleLemma");
+						if (simpleLemma != null) {
+							if (cleanSenses) {
+								simpleLemma = clean(simpleLemma);
+							}
+							allSenses.add(simpleLemma);
+						}
+					}
+					if (allSenses.isEmpty()) {
+						LOG.error("No senses found sense in synset {}", currentSynsetId);
 						continue;
 					} else {
 						Map domains = (Map) json.get("domains");
@@ -151,10 +158,13 @@ public class Crawler {
 						for (Object domain : domains.keySet()) {
 							foundDomains.add((String) domain);
 							Object domainWeight = domains.get(domain);
-							String senseWeight = mainSense + "\t" + domainWeight + "\t" + domain + "\t"
-									+ currentSynsetId;
-							LOG.info("Adding {}", senseWeight);
-							out.write(senseWeight + "\n");
+							// remove "," from senses to ensure valid format
+							allSenses = allSenses.stream().map(x -> x.replace(",", "_"))
+									.collect(Collectors.toCollection(HashSet::new));
+							String senseInformationLine = mainSense + "\t" + domainWeight + "\t" + domain + "\t"
+									+ currentSynsetId + "\t" + StringUtils.join(allSenses, ",");
+							LOG.info("Adding {}", senseInformationLine);
+							out.write(senseInformationLine + "\n");
 							out.flush();
 							countFoundSenses++;
 						}

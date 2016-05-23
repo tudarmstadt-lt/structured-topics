@@ -44,7 +44,6 @@ public class ExtractImagesFromCache {
 
 	private static final String OPTION_API_CACHE = "apiCache";
 	private static final String OPTION_OUT_FILE = "out";
-	private static final String OPTION_DOWNLOAD_LIST = "outDownload";
 
 	public static void main(String[] args) {
 		Options options = createOptions();
@@ -56,11 +55,7 @@ public class ExtractImagesFromCache {
 				return;
 			}
 			File out = new File(cl.getOptionValue(OPTION_OUT_FILE));
-			File downloadList = null;
-			if (cl.hasOption(OPTION_DOWNLOAD_LIST)) {
-				downloadList = new File(cl.getOptionValue(OPTION_DOWNLOAD_LIST));
-			}
-			extractImages(cacheLocation, out, downloadList);
+			extractImages(cacheLocation, out);
 			LOG.info("Done!");
 		} catch (ParseException e) {
 			LOG.error("Invalid arguments: {}", e.getMessage());
@@ -74,74 +69,45 @@ public class ExtractImagesFromCache {
 		}
 	}
 
-	private static void extractImages(File apiCache, File output, File downloadList)
-			throws FileNotFoundException, IOException {
+	private static void extractImages(File apiCache, File output) throws FileNotFoundException, IOException {
 		File[] files = apiCache.listFiles(new NoEdgesFilenameFilter());
 		int total = files.length;
 		int count = 0;
 		try (BufferedWriter out = Utils.openWriter(output)) {
-			try (BufferedWriter downloads = (downloadList == null ? null : Utils.openWriter(downloadList))) {
-				for (File f : files) {
-					if (count++ % 1000 == 0) {
-						LOG.info("Parsing file {}/{}", count, total);
+			for (File f : files) {
+				if (count++ % 1000 == 0) {
+					LOG.info("Parsing file {}/{}", count, total);
+				}
+				try (FileReader reader = new FileReader(f)) {
+					Set<String> uniqueSenses = new HashSet<>();
+					Set<Pair<String, String>> uniqueImages = new HashSet<>();
+					Gson gson = new Gson();
+					Map json = toMapOrEmpty(gson.fromJson(reader, Object.class));
+					String synsetId = f.getName().replace("bn_", "bn:").replace(".json", "");
+					List senses = toListOrEmpty(json.get("senses"));
+					for (Object o : senses) {
+						Map sense = toMapOrEmpty(o);
+						Object lemma = sense.get("simpleLemma");
+						if (lemma != null && lemma instanceof String) {
+							uniqueSenses.add((String) lemma);
+						}
 					}
-					try (FileReader reader = new FileReader(f)) {
-						Set<String> uniqueSenses = new HashSet<>();
-						Set<String> uniqueDomains = new HashSet<>();
-						Set<Pair<String, String>> uniqueImages = new HashSet<>();
-						Gson gson = new Gson();
-						Map json = toMapOrEmpty(gson.fromJson(reader, Object.class));
-						String synsetId = f.getName().replace("bn_", "").replace(".json", "");
-						Map domains = toMapOrEmpty(json.get("domains"));
-						for (Object o : domains.keySet()) {
-							if (o instanceof String) {
-								uniqueDomains.add((String) o);
-							}
+					List images = toListOrEmpty(json.get("images"));
+					for (Object o : images) {
+						Map image = toMapOrEmpty(o);
+						String thumbUrl = (String) image.get("thumbUrl");
+						String url = (String) image.get("url");
+						if (thumbUrl != null || url != null) {
+							uniqueImages.add(Pair.of(url, thumbUrl));
 						}
-						List senses = toListOrEmpty(json.get("senses"));
-						for (Object o : senses) {
-							Map sense = toMapOrEmpty(o);
-							Object lemma = sense.get("lemma");
-							if (lemma != null && lemma instanceof String) {
-								uniqueSenses.add((String) lemma);
-							}
-						}
-						List images = toListOrEmpty(json.get("images"));
-						for (Object o : images) {
-							Map image = toMapOrEmpty(o);
-							String thumbUrl = (String) image.get("thumbUrl");
-							String url = (String) image.get("url");
-							if (thumbUrl != null || url != null) {
-								uniqueImages.add(Pair.of(url, thumbUrl));
-							}
-						}
-						StringBuilder b = new StringBuilder();
-						b.append(synsetId);
-						b.append("\t");
-						b.append(StringUtils.join(uniqueSenses, ", "));
-						b.append("\t");
-						b.append(StringUtils.join(uniqueDomains, ", "));
-						b.append("\t");
-						List<String> uniqueImagesStrings = new ArrayList<>();
-						for (Pair<String, String> image : uniqueImages) {
-							uniqueImagesStrings.add(StringUtils.defaultString(image.getKey()) + " ["
-									+ StringUtils.defaultString(image.getValue()) + "]" + ", ");
-						}
-						b.append(StringUtils.join(uniqueImagesStrings, ", "));
-						b.append("\n");
-						out.write(b.toString());
-						if (downloads != null) {
-							downloads
-									.write(synsetId + "\t"
-											+ (uniqueImages.stream()
-													.map(x -> StringUtils
-															.defaultString(x.getKey() + ", " + x.getValue()))
-													.collect(Collectors.joining(", ")))
-											+ "\n");
-						}
-					} catch (Exception e) {
-						LOG.error("Error while parsing file {}", f.getAbsolutePath(), e);
 					}
+					out.write(synsetId + "\t" + StringUtils.join(uniqueSenses, ", ") + "\t"
+							+ (uniqueImages.stream()
+									.map(x -> StringUtils.defaultString(x.getKey() + ", " + x.getValue()))
+									.collect(Collectors.joining(", ")))
+							+ "\n");
+				} catch (Exception e) {
+					LOG.error("Error while parsing file {}", f.getAbsolutePath(), e);
 				}
 			}
 		}
@@ -171,9 +137,6 @@ public class ExtractImagesFromCache {
 		Option out = Option.builder(OPTION_OUT_FILE).argName("out").desc("File where the images will be appended")
 				.hasArg().required().build();
 		options.addOption(out);
-		Option downloadList = Option.builder(OPTION_DOWNLOAD_LIST).argName("outDownload")
-				.desc("Flat file with a list of all images for each synset").hasArg().build();
-		options.addOption(downloadList);
 		return options;
 	}
 }
