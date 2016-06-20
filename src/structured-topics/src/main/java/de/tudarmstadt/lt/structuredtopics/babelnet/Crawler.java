@@ -117,88 +117,94 @@ public class Crawler {
 		String currentSynsetId = null;
 		try (BufferedWriter out = new BufferedWriter(new FileWriter(outFile, true))) {
 			while (!queue.isEmpty()) {
-				Iterator<String> it = queue.iterator();
-				currentSynsetId = it.next();
-				it.remove();
-				if (!visitedSynsets.add(currentSynsetId)) {
-					LOG.info("Skipping {}, already visited", currentSynsetId);
-				} else {
-					String synset = api.getSynset(currentSynsetId);
-					if (StringUtils.isEmpty(synset)) {
-						LOG.error("Empty response from api for synset {}, putting it at end of queue", currentSynsetId);
-						visitedSynsets.remove(currentSynsetId);
-						queue.add(currentSynsetId);
-						continue;
-					}
-					Gson gson = new GsonBuilder().create();
-					Map json = (Map) gson.fromJson(synset, Object.class);
-					Set<String> allSenses = new HashSet<>();
-					String mainSense = (String) json.get("mainSense");
-					if (mainSense != null) {
-						allSenses.add(mainSense);
-					}
-					List senses = (List) json.get("senses");
-					for (Object sense : senses) {
-						String simpleLemma = (String) ((Map) sense).get("simpleLemma");
-						if (simpleLemma != null) {
-							if (cleanSenses) {
-								simpleLemma = clean(simpleLemma);
-							}
-							allSenses.add(simpleLemma);
-						}
-					}
-					if (allSenses.isEmpty()) {
-						LOG.error("No senses found sense in synset {}", currentSynsetId);
-						continue;
+				try {
+					Iterator<String> it = queue.iterator();
+					currentSynsetId = it.next();
+					it.remove();
+					if (!visitedSynsets.add(currentSynsetId)) {
+						LOG.info("Skipping {}, already visited", currentSynsetId);
 					} else {
-						Map domains = (Map) json.get("domains");
-						if (cleanSenses) {
-							mainSense = clean(mainSense);
+						String synset = api.getSynset(currentSynsetId);
+						if (StringUtils.isEmpty(synset)) {
+							LOG.error("Empty response from api for synset {}, putting it at end of queue",
+									currentSynsetId);
+							visitedSynsets.remove(currentSynsetId);
+							queue.add(currentSynsetId);
+							continue;
 						}
-						for (Object domain : domains.keySet()) {
-							foundDomains.add((String) domain);
-							Object domainWeight = domains.get(domain);
-							// remove "," from senses to ensure valid format
-							allSenses = allSenses.stream().map(x -> x.replace(",", "_"))
-									.collect(Collectors.toCollection(HashSet::new));
-							String senseInformationLine = mainSense + "\t" + domainWeight + "\t" + domain + "\t"
-									+ currentSynsetId + "\t" + StringUtils.join(allSenses, ",");
-							LOG.info("Adding {}", senseInformationLine);
-							out.write(senseInformationLine + "\n");
-							out.flush();
-							countFoundSenses++;
+						Gson gson = new GsonBuilder().create();
+						Map json = (Map) gson.fromJson(synset, Object.class);
+						Set<String> allSenses = new HashSet<>();
+						String mainSense = (String) json.get("mainSense");
+						if (mainSense != null) {
+							allSenses.add(mainSense);
 						}
-					}
-					// found a sense from domain, expand synset
-					String edgesJson = api.getEdges(currentSynsetId);
-					if (StringUtils.isEmpty(edgesJson)) {
-						LOG.error("Failed to expand synset {}", currentSynsetId);
-						continue;
-					}
-					List edges = (List) gson.fromJson(edgesJson, Object.class);
-					for (Object edge : edges) {
-						Map edgeData = (Map) edge;
-						String targetSynset = (String) edgeData.get("target");
-						String language = (String) edgeData.get("language");
-						// TODO all languages?
-						if (language.equals("EN")) {
-							if (!visitedSynsets.contains(targetSynset)) {
-								queue.add(targetSynset);
+						List senses = (List) json.get("senses");
+						for (Object sense : senses) {
+							String simpleLemma = (String) ((Map) sense).get("simpleLemma");
+							if (simpleLemma != null) {
+								if (cleanSenses) {
+									simpleLemma = clean(simpleLemma);
+								}
+								allSenses.add(simpleLemma);
 							}
 						}
+						if (allSenses.isEmpty()) {
+							LOG.error("No senses found sense in synset {}", currentSynsetId);
+							continue;
+						} else {
+							Map domains = (Map) json.get("domains");
+							if (cleanSenses) {
+								mainSense = clean(mainSense);
+							}
+							for (Object domain : domains.keySet()) {
+								foundDomains.add((String) domain);
+								Object domainWeight = domains.get(domain);
+								// remove "," from senses to ensure valid format
+								allSenses = allSenses.stream().map(x -> x.replace(",", "_"))
+										.collect(Collectors.toCollection(HashSet::new));
+								String senseInformationLine = mainSense + "\t" + domainWeight + "\t" + domain + "\t"
+										+ currentSynsetId + "\t" + StringUtils.join(allSenses, ",");
+								LOG.info("Adding {}", senseInformationLine);
+								out.write(senseInformationLine + "\n");
+								out.flush();
+								countFoundSenses++;
+							}
+						}
+						// found a sense from domain, expand synset
+						String edgesJson = api.getEdges(currentSynsetId);
+						if (StringUtils.isEmpty(edgesJson)) {
+							LOG.error("Failed to expand synset {}", currentSynsetId);
+							continue;
+						}
+						List edges = (List) gson.fromJson(edgesJson, Object.class);
+						for (Object edge : edges) {
+							Map edgeData = (Map) edge;
+							String targetSynset = (String) edgeData.get("target");
+							String language = (String) edgeData.get("language");
+							// TODO all languages?
+							if (language.equals("EN")) {
+								if (!visitedSynsets.contains(targetSynset)) {
+									queue.add(targetSynset);
+								}
+							}
+						}
+
+					}
+					if (System.currentTimeMillis() - lastTimeSaved > SAVE_EACH_MS) {
+						saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
+						lastTimeSaved = System.currentTimeMillis();
 					}
 
-				}
-				if (System.currentTimeMillis() - lastTimeSaved > SAVE_EACH_MS) {
-					saveQueueAndVisited(queueFile, visitedFile, visitedSynsets, queue);
-					lastTimeSaved = System.currentTimeMillis();
+				} catch (Exception e) {
+					LOG.error("Error while crawling, {} will be visited again", currentSynsetId);
+					LOG.error("Error: ", e);
+					queue.add(currentSynsetId);
+					visitedSynsets.remove(currentSynsetId);
 				}
 			}
-		} catch (Exception e) {
-			LOG.error("Error while crawling, {} will be visited again", currentSynsetId);
-			LOG.error("Error: ", e);
-			queue.add(currentSynsetId);
-			visitedSynsets.remove(currentSynsetId);
+		} catch (IOException e) {
+			LOG.error("Error while opening file writer", e);
 		} finally {
 			LOG.info("Done crawling, found {} new senses with {} calls to the api. Remaining queue size: {}",
 					countFoundSenses, api.getApiCallCount(), queue.size());
