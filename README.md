@@ -62,11 +62,11 @@ java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.l
 
 Parameters:
 
- - in --> Sorted similarities
- - out --> Output file
+ - in ---> Sorted similarities
+ - out ---> Output file
  - sensesToKeep -> Number of top similar senses to keep for each sense
- - binarize --> (optional) Replace all weights with 1
- - similarityThreshold --> (optional) Additional pruning: If the similarity drops below this threshold (factor to the top similarity), all further senses are pruned.
+ - binarize ---> (optional) Replace all weights with 1
+ - similarityThreshold ---> (optional) Additional pruning: If the similarity drops below this threshold (factor to the top similarity), all further senses are pruned.
  
 ###Clustering
  
@@ -80,9 +80,9 @@ java -cp chinese-whispers.jar de.tudarmstadt.lt.cw.global.CWGlobal -in similarit
 
 Parameters:
 
- - in --> The similarities
- - out --> The output file
- - N --> maximum number of Edges per Node (should be >= the N for the similarity calculation)
+ - in ---> The similarities
+ - out ---> The output file
+ - N ---> maximum number of Edges per Node (should be >= the N for the similarity calculation)
  
 ###Cluster Labeling
  
@@ -128,26 +128,25 @@ java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.l
 
 Parameters:
 
- - key --> API key for babelnet
+ - key ---> API key for babelnet
  - apiCache ---> directory where responses from the api are cached
- - synsetStart --> IDs of the starting synsets. Pass as csv list (<id1>,<id2>,...) or single element (<id1>)
- - steps --> Maximum number of steps. One step = visiting one synset and expanding all edges
+ - synsetStart ---> IDs of the starting synsets. Pass as csv list (<id1>,<id2>,...) or single element (<id1>)
  - out ---> File where the found senses are saved in csv format
  - visited ---> File where ids of visited synsets are saved in csv format
  - queue ---> File where the queue of synsets is cached (csv.format)
- - cleanSenses ---> (optional) Some senses have additional information like pos-tag or the domain attached. This option will clean the senses before writing them to the output-file
+ - cleanSenses ---> (optional) Some senses have additional information like pos-tag or the domain attached. This option will clean the senses before writing them to the output-file (no arguments)
  
 The output file will have the following format:
 ```
-<sense>\t<weight>\t<domain>\t<synset-id>
+<sense>\t<weight>\t<domain>\t<synset-id>\t<list_of_all_senses_for_the_synset>
 ```
 
 Example:
 
 ```
-interview       1.0     LANGUAGE_AND_LINGUISTICS        bn:00047238n
-procedure       0.430608877889  COMPUTING       bn:00036826n
-procedure       0.385539749925  MATHEMATICS     bn:00036826n
+interview       1.0     LANGUAGE_AND_LINGUISTICS        bn:00047238n       Interview_tips,Interviewy,Interviewed,Interviewers 
+procedure       0.430608877889  COMPUTING       bn:00036826n        subprogram,Algorithm_function,Leaf_function,procedure_call
+procedure       0.385539749925  MATHEMATICS     bn:00036826n        subprogram,Algorithm_function,Leaf_function,procedure_call
 ```
 
 If a senses belongs to multiple domains, it is added once for each domain.
@@ -174,14 +173,74 @@ java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.l
 
 Parameters:
 
- - bnetSenses --> Senses from the previous step, the file may contain only senses from exact one domain.
+ - bnetSenses ---> Senses from the previous step (file of the out-argument).
  - clusters ---> Clusters from the clustering module
  - out ---> The scored clusters.
  
 The output file will have the following format:
 ```
-<clusterId>\t<score1>\t<score2>\t<cluster-size>\t<cluster-words>
+<clusterId>\t<clusterSize>\t<topOverlap>\t<topDomain1>\t<score1>\t<topDomain2>\t<score2>\t...\t<cluster-size>\t<cluster-words>
 ```
 
- - score1 adds the weight of all senses which are in the cluster, divided by the cluster size
- - score2 is a cosine distance with the domain-weights for the senses and weight 1 for the cluster words
+ - Overlap is the number of words from the cluster contained in a babelnet domain, divided by the size of the cluster
+ - TopOverlap is the best score over all domains
+ - The first domain and score is the max simple score (see below) weighted by the log size of the cluster
+ - The second domain and score is the max simple score which is the sum of weights from matched words in the domain divided by the cluster size
+ - The third domain and score is the max cosine score between the cluster and each domain. Words in the cluster are treated with weight 1, words in the domain with their given weights.
+ 
+ In most cases, all scores will map to the same domain but there may be small differences related to the different metrics.
+ 
+ 
+Example:
+ 
+```
+2641	13	1	PHYSICS_AND_ASTRONOMY	1.9544985425833155	PHYSICS_AND_ASTRONOMY	0.7620027806387693	PHYSICS_AND_ASTRONOMY 0.00003836444703270673	Phobos#6, Mimas#8, Deimos#7, Iapetus#2, Triton#14, Tethys#2, Charon#4, Himalia#0, Io#4, Dione#2, Ganymede#10, Callisto#9, Enceladus#6, 
+```
+
+###Collect sense images
+The index built from the babelnet crawler contains links to different images, which can be used to build an index for sense images.
+
+The following module can be used to extract the image urls from the cache:
+
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.babelnet.ExtractImagesFromCache -apiCache babelnetApiCache -out senseImagesDownloadList.csv
+```
+
+Parameters:
+
+ - apiCache ---> refers to the directory of the crawlers apiCache.
+ - out ---> Creates a list of urls which can be used for the downloader (next step).
+ 
+ The download list will have the following format:
+```
+<synsetId>\t<list-of-unique-senses>\t<list-of-image-urls>
+```
+
+Images can be downloaded and stored in an index using the next module:
+```
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar  de.tudarmstadt.lt.structuredtopics.babelnet.DownloadImages -downloadList senseImagesDownloadList.csv -downloadTo senseImages -index senseImages.csv
+```
+
+Parameters:
+
+ - downloadList ---> the output file from the image extractor (previous step)
+ - downloadTo ---> directory where all images will be stored
+ - index ---> csv file with an index for all senses and images
+ 
+ Images will be named by the synsetId, the hashed url and the extension of the url.
+ 
+ The index will have the following format:
+ ```
+<sense>\t<synsetId>\t<pathToImage>
+```
+
+Note, that senses may be contained multiple times for different synsets.
+
+##Piped modules
+The script scripts/run_experiment2.sh can be used to run an aggregated version of the modules.
+It requires the configuration of a base directory, the structured topics jar and the chinese whispers jar.
+DDTs have to be placed in the experimentDirectory/1_ddts.
+In addition the foundSenses.csv from the babelnet crawler is required for the mappings.
+
+When executed, the script will create similarities for all ddts, cluster the similarities with different options and map the clusters to the babelnet domains. Finally, the results are aggregated to a .csv-file with some metrics.
+For more details, the class `de.tudarmstadt.lt.structuredtopics.evaluate.Experiment2ResultAggregator` may be inspected or modified.
