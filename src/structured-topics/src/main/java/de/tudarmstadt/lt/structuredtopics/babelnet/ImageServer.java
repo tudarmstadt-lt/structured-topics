@@ -15,8 +15,8 @@ public class ImageServer {
 	public static void main(String[] args) {
 		Server jettyServer = null;
 		try {
-			if (args.length != 2) {
-				LOG.warn("Expected parameters missing: <port> <path to senseImages file>");
+			if (args.length != 3) {
+				LOG.warn("Expected parameters missing: <port> <path to senseImages file> <basepath>");
 				LOG.warn("Sense Images Format: <word TAB synsetId TAB pathToImage>");
 				return;
 			}
@@ -24,8 +24,10 @@ public class ImageServer {
 			File senseImages = new File(args[1]);
 			if (!senseImages.exists()) {
 				LOG.error("File {} not found", senseImages.getAbsolutePath());
+				return;
 			}
-			ImageLookup.loadIndex(senseImages);
+			String basepath = args[2];
+			ImageLookup.loadIndex(senseImages, basepath);
 			jettyServer = new Server(port);
 			ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
 			context.setContextPath("/");
