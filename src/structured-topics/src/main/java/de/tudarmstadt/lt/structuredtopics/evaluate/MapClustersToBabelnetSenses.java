@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -22,6 +23,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +39,7 @@ public class MapClustersToBabelnetSenses {
 	private static final String OPTION_CLUSTERS_FILE = "clusters";
 	private static final String OPTION_SENSES_FILE = "bnetSenses";
 	private static final String OPTION_OUTPUT_FILE = "out";
+	private static final String OPTION_OUTPUT_INDEX_FILE = "outDomainIndex";
 
 	public static void main(String[] args) {
 		Options options = createOptions();
@@ -48,6 +51,15 @@ public class MapClustersToBabelnetSenses {
 			Set<String> sensesLines = Utils.loadUniqueLines(sensesFile);
 			LOG.info("building index");
 			Map<String, Map<String, Double>> index = buildIndexFromSenses(sensesLines);
+			if (cl.hasOption(OPTION_OUTPUT_INDEX_FILE)) {
+				File outIndex = new File(cl.getOptionValue(OPTION_OUTPUT_INDEX_FILE));
+				if (!outIndex.exists()) {
+					LOG.info("Writing babelnet index to {}", outIndex.getAbsolutePath());
+					writeDomainIndex(index, outIndex);
+				} else {
+					LOG.info("Domain index {} already exists", outIndex.getAbsolutePath());
+				}
+			}
 			LOG.info("Scoring clusters");
 			File out = new File(cl.getOptionValue(OPTION_OUTPUT_FILE));
 			scoreAndWriteClusters(clusters, index, out);
@@ -59,6 +71,21 @@ public class MapClustersToBabelnetSenses {
 				new HelpFormatter().printHelp(w, Integer.MAX_VALUE, "application", "", options, 0, 0, "", true);
 			}
 			LOG.error(sw.toString());
+		} catch (Exception e) {
+			LOG.error("Error", e);
+		}
+	}
+
+	private static void writeDomainIndex(Map<String, Map<String, Double>> index, File outIndex) {
+		try (BufferedWriter out = Utils.openWriter(outIndex)) {
+			out.write("domain-name\tdomain-size\tdomain-words:weights\n");
+			for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
+				String domainName = domain.getKey();
+				Map<String, Double> domainWords = domain.getValue();
+				List<String> words = domainWords.entrySet().stream().map(x -> x.getKey() + ":" + x.getValue())
+						.collect(Collectors.toList());
+				out.write(domainName + "\t" + words.size() + "\t" + StringUtils.join(words, ", ") + "\n");
+			}
 		} catch (Exception e) {
 			LOG.error("Error", e);
 		}
@@ -124,13 +151,15 @@ public class MapClustersToBabelnetSenses {
 					double topPurityScore = 0;
 					String topPurityScoreDomain = "";
 					double topOverlap = 0;
+					String topOverlapDomain = "";
 
 					for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
+						String domainName = domain.getKey();
 						double overlap = overlap(domain.getValue(), clusterWords);
 						if (overlap > topOverlap) {
 							topOverlap = overlap;
+							topOverlapDomain = domainName;
 						}
-						String domainName = domain.getKey();
 						double simpleScore = scoreSimple(domain.getValue(), clusterWords);
 						if (simpleScore > topSimpleScore) {
 							topSimpleScore = simpleScore;
@@ -148,12 +177,12 @@ public class MapClustersToBabelnetSenses {
 						}
 					}
 					String topDomains = "";
+					topDomains += topOverlapDomain + "\t" + df.format(topOverlap) + "\t";
 					topDomains += topPurityScoreDomain + "\t" + df.format(topPurityScore) + "\t";
 					topDomains += topSimpleScoreDomain + "\t" + df.format(topSimpleScore) + "\t";
 					topDomains += topCosineScoreDomain + "\t" + df.format(topCosineScore);
 
-					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + df.format(topOverlap) + "\t"
-							+ topDomains + "\t" + split[2];
+					String outLine = clusterIndex + "\t" + clusterWords.length + "\t" + topDomains + "\t" + split[2];
 					synchronized (out) {
 						out.write(outLine + "\n");
 					}
@@ -264,6 +293,10 @@ public class MapClustersToBabelnetSenses {
 				.desc("the clusters, ordered by their weight to the domain, capped at zero").required().hasArg()
 				.build();
 		options.addOption(output);
+		Option outputIndexFile = Option.builder(OPTION_OUTPUT_INDEX_FILE).argName("outDomainIndex")
+				.desc("Output file for the babelnet domain index. The file will only be created if it does not exist")
+				.hasArg().build();
+		options.addOption(outputIndexFile);
 		return options;
 	}
 }

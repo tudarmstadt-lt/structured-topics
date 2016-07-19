@@ -224,14 +224,20 @@ public class Experiment2ResultAggregator {
 		double maxCosineScore = 0;
 		try (BufferedReader in = Utils.openReader(mappings)) {
 			String line = null;
+			int lineCount = 0;
 			while ((line = in.readLine()) != null) {
-				String[] columns = line.split("\\t");
-				double overlap = Double.parseDouble(columns[2]);
-				maxOverlap = Math.max(maxOverlap, overlap);
-				totalOverlap += overlap;
-				double cosineScore = Double.parseDouble(columns[8]);
-				maxCosineScore = Math.max(maxCosineScore, cosineScore);
-				totalCosineScore += cosineScore;
+				try {
+					lineCount++;
+					String[] columns = line.split("\\t");
+					double overlap = Double.parseDouble(columns[3]);
+					maxOverlap = Math.max(maxOverlap, overlap);
+					totalOverlap += overlap;
+					double cosineScore = Double.parseDouble(columns[9]);
+					maxCosineScore = Math.max(maxCosineScore, cosineScore);
+					totalCosineScore += cosineScore;
+				} catch (Exception e) {
+					LOG.error("Error while processing line {}, {}", lineCount, line, e);
+				}
 			}
 		} catch (IOException e) {
 			LOG.error("Error while reading mapping file {}", mappings.getAbsolutePath(), e);

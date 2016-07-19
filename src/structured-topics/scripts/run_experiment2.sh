@@ -116,6 +116,7 @@ do
 	de.tudarmstadt.lt.structuredtopics.evaluate.MapClustersToBabelnetSenses \
 	-bnetSenses $BNET_SENSES \
 	-clusters $cluster \
+        -outDomainIndex $EXPERIMENT_DIR/domain_index.csv \
 	-out $MAPPING_DIR/$mappingFile".tmp.gz" 2>&1 | tee $LOG_DIR/$mappingFile.log
 
 	echo "sorting mappings"
