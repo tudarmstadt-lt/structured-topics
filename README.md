@@ -194,7 +194,7 @@ awk -F$'\t' '{print >> ("foundSenses_"$3".csv")}' foundSenses.csv
 To find clusters which are similar to the babelnet domains, the following module can be used:
 
 ```
-java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.evaluate.MapClustersToBabelnetSenses -bnetSenses foundSenses_COMPUTING.csv -clusters clusters-sorted-nsi-similarities-senses-wiki-n30-1600k.csv.gz -out clustersCOMPUTING.csv
+java -cp structured-topics-0.0.1-SNAPSHOT_with_dependencies.jar de.tudarmstadt.lt.structuredtopics.evaluate.MapClustersToBabelnetSenses -bnetSenses foundSenses_COMPUTING.csv -clusters clusters-sorted-nsi-similarities-senses-wiki-n30-1600k.csv.gz -out clustersCOMPUTING.csv -outDomainIndex domain_index.csv -splitMultiwords
 ```
 
 Parameters:
@@ -203,15 +203,18 @@ Parameters:
  - clusters ---> Clusters from the clustering module.
  - out ---> The scored clusters.
  - outDomainIndex ---> (optional) creates a dump of the used babelnet domains.
- 
+ - splitMultiwords ---> (optional) Takes no argument. If the flag is set, multiwords will be split by `_` and the subwords will be added to the index too. 
 
+When reading the babelnet senses, a map-like index is created. Each domain is mapped to all senses from this domain.
+If multiple senses belong to one domain (can happen if different synsets have identical words or when multiwords are splitted), their weights will be added.
+Leading signs of weights are ignored, the index will always use the absolute value.
  
 The output file will have the following format:
 ```
 <clusterId>\t<clusterSize>\t<topOverlap>\t<topOverlapDomain>\t<topOverlap>\t<topPurityDomain>\t<topPurity>\t<topSimpleScoreDomain>\t<topSimpleScore>\t<topCosineScoreDomain>\t<topCosineScore>\t<cluster-words>
 ```
 
-The domain index is written to a csv-file with the format `<domain-name>\t<domain-size>\t<domain-words>` where the domain-words are separated by `, ` and each word has the corresponding weight concatenated with `:` as separator.
+If the output for the domain index is set, the domain index is written to a csv-file with the format `<domain-name>\t<domain-size>\t<domain-words>` where the domain-words are separated by `, ` and each word has the corresponding weight concatenated with `:` as separator.
 
 Example:
 ```

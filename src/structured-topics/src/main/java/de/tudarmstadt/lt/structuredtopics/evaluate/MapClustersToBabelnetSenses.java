@@ -40,6 +40,7 @@ public class MapClustersToBabelnetSenses {
 	private static final String OPTION_SENSES_FILE = "bnetSenses";
 	private static final String OPTION_OUTPUT_FILE = "out";
 	private static final String OPTION_OUTPUT_INDEX_FILE = "outDomainIndex";
+	private static final String OPTION_SPLIT_MULTIWORDS = "splitMultiwords";
 
 	public static void main(String[] args) {
 		Options options = createOptions();
@@ -49,8 +50,9 @@ public class MapClustersToBabelnetSenses {
 			LOG.info("Loading babelnet senses");
 			File sensesFile = new File(cl.getOptionValue(OPTION_SENSES_FILE));
 			Set<String> sensesLines = Utils.loadUniqueLines(sensesFile);
+			boolean splitMultiwords = cl.hasOption(OPTION_SPLIT_MULTIWORDS);
 			LOG.info("building index");
-			Map<String, Map<String, Double>> index = buildIndexFromSenses(sensesLines);
+			Map<String, Map<String, Double>> index = buildIndexFromSenses(sensesLines, splitMultiwords);
 			if (cl.hasOption(OPTION_OUTPUT_INDEX_FILE)) {
 				File outIndex = new File(cl.getOptionValue(OPTION_OUTPUT_INDEX_FILE));
 				if (!outIndex.exists()) {
@@ -93,7 +95,8 @@ public class MapClustersToBabelnetSenses {
 	}
 
 	// domain - (sense - weight)
-	private static Map<String, Map<String, Double>> buildIndexFromSenses(Set<String> sensesLines) {
+	private static Map<String, Map<String, Double>> buildIndexFromSenses(Set<String> sensesLines,
+			boolean splitMultiwords) {
 		Map<String, Map<String, Double>> domains = Maps.newHashMap();
 		for (String line : sensesLines) {
 			String[] split = line.split("\t");
@@ -106,26 +109,33 @@ public class MapClustersToBabelnetSenses {
 					domains.put(domain, domainSenses);
 				}
 				String sense = split[0];
-				Double weight = Double.valueOf(split[1]);
-				// TODO negative domain weight on babelnet, how to handle?
-				if (weight < 0) {
-					weight = 1.0;
-				} else if (weight > 1) {
-					weight = 1.0;
-				}
-				domainSenses.put(sense.toLowerCase(), weight);
+				// there are negative weights on babelnet, so take the absolute
+				// value instead
+				Double weight = Math.abs(Double.valueOf(split[1]));
 				// words are separated by "_", so tokenize the sense to words
-				// and add them too
-				String[] senseWords = sense.split("_");
-				for (String s : senseWords) {
-					domainSenses.put(s.toLowerCase(), weight);
+				// and add them too if splitting is enabled
+				if (splitMultiwords) {
+					String[] senseWords = sense.split("_");
+					for (String s : senseWords) {
+						addWeightToIndex(s.toLowerCase(), weight, domainSenses);
+					}
 				}
 				// also put the entire word separated by whitespace for
 				// multiword mappings
-				domainSenses.put(sense.toLowerCase().replace('_', ' '), weight);
+				addWeightToIndex(sense.toLowerCase().replace('_', ' '), weight, domainSenses);
 			}
 		}
 		return domains;
+	}
+
+	public static void addWeightToIndex(String sense, Double weight, Map<String, Double> index) {
+		Double indexWeight = index.get(sense);
+		if (indexWeight != null) {
+			indexWeight += weight;
+		} else {
+			indexWeight = weight;
+		}
+		index.put(sense, indexWeight);
 	}
 
 	private static void scoreAndWriteClusters(File clusters, Map<String, Map<String, Double>> index, File outFile) {
@@ -298,6 +308,10 @@ public class MapClustersToBabelnetSenses {
 				.desc("Output file for the babelnet domain index. The file will only be created if it does not exist")
 				.hasArg().build();
 		options.addOption(outputIndexFile);
+		Option splitMultiwords = Option.builder(OPTION_SPLIT_MULTIWORDS).argName("splitMultiwords")
+				.desc("If this option is set, multiwords like 'a_b_c' will be split and added to the index as [<a b c>, <a>, <b>, <c>]")
+				.build();
+		options.addOption(splitMultiwords);
 		return options;
 	}
 }
