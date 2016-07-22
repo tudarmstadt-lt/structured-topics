@@ -93,16 +93,16 @@ public class Utils {
 		if (file.getName().endsWith(".gz")) {
 			in = new GZIPInputStream(in);
 		}
-		Reader reader = new InputStreamReader(in);
+		Reader reader = new InputStreamReader(in, "UTF-8");
 		return new BufferedReader(reader);
 	}
 
-	public static BufferedWriter openWriter(File file) throws IOException {
-		OutputStream out = new FileOutputStream(file);
+	public static BufferedWriter openWriter(File file, boolean append) throws IOException {
+		OutputStream out = new FileOutputStream(file, append);
 		if (file.getName().endsWith(".gz")) {
 			out = new GZIPOutputStream(out);
 		}
-		Writer writer = new OutputStreamWriter(out);
+		Writer writer = new OutputStreamWriter(out, "UTF-8");
 		return new BufferedWriter(writer);
 	}
 
@@ -112,8 +112,7 @@ public class Utils {
 		if (mode == InputMode.GZ) {
 			in = new GZIPInputStream(in);
 		}
-		// TODO if required, encoding should be passed here
-		Reader reader = new InputStreamReader(in);
+		Reader reader = new InputStreamReader(in, "UTF-8");
 		return new BufferedReader(reader);
 	}
 
@@ -121,8 +120,7 @@ public class Utils {
 	public static BufferedWriter openGzipWriter(File output) throws IOException {
 		OutputStream out = new FileOutputStream(output);
 		out = new GZIPOutputStream(out);
-		// TODO if required, encoding should be passed here
-		Writer writer = new OutputStreamWriter(out);
+		Writer writer = new OutputStreamWriter(out, "UTF-8");
 		return new BufferedWriter(writer);
 	}
 
@@ -203,7 +201,7 @@ public class Utils {
 	}
 
 	public static void writeClustersToFile(List<SenseCluster> clusters, File file) throws IOException {
-		try (BufferedWriter out = openWriter(file)) {
+		try (BufferedWriter out = openWriter(file, false)) {
 			int count = 0;
 			for (SenseCluster cluster : clusters) {
 				count++;

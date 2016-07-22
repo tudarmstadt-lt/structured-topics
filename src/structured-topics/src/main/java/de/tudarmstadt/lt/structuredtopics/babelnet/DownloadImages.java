@@ -70,7 +70,7 @@ public class DownloadImages {
 
 	private static void downloadImages(File downloadList, File out, File index) {
 		try (BufferedReader in = Utils.openReader(downloadList)) {
-			try (BufferedWriter indexOut = Utils.openWriter(index)) {
+			try (BufferedWriter indexOut = Utils.openWriter(index, false)) {
 				in.lines().parallel().forEach(line -> {
 					String[] split = line.split("\\t");
 					if (split.length != 3) {

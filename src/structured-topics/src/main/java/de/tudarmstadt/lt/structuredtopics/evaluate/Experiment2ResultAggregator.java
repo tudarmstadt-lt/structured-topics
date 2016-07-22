@@ -67,7 +67,7 @@ public class Experiment2ResultAggregator {
 		Map<String, Map<Boolean, Map<String, Map<String, MappingStats>>>> mappingsStats = mappingsStats(
 				new File(resultDir, "4_mappings"));
 		LOG.info("Writing results to {}", resultFile.getAbsolutePath());
-		try (BufferedWriter out = Utils.openWriter(resultFile)) {
+		try (BufferedWriter out = Utils.openWriter(resultFile, false)) {
 			out.write(
 					"ddtName,filtered,totalSenses,uniqueSenseWords,totalClusterWords,uniqueClusterWords,averageClusterSize,similarityMetric,numberOfEdges,cwOption,numberOfClusters,maxOverlap,avgOverlap,totalOverlap,maxCosineScore,totalCosineScore\n");
 			for (Entry<String, Map<Boolean, Map<String, Map<String, MappingStats>>>> e : mappingsStats.entrySet()) {

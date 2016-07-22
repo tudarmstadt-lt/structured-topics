@@ -106,7 +106,7 @@ public class SenseSimilarityCalculator {
 	@VisibleForTesting
 	protected static void writeAllSimilarities(File output, File ddt) {
 		int total = Utils.countLines(ddt);
-		try (BufferedWriter out = Utils.openWriter(output)) {
+		try (BufferedWriter out = Utils.openWriter(output, false)) {
 			int count = 0;
 			try (DDTIterator it = new Parser().iterateDDT(ddt)) {
 				while (it.hasNext()) {
@@ -202,7 +202,7 @@ public class SenseSimilarityCalculator {
 		IndexReader reader = DirectoryReader.open(index);
 		IndexSearcher searcher = new IndexSearcher(reader);
 		CountDownLatch latch = new CountDownLatch(total);
-		try (BufferedWriter out = Utils.openWriter(output)) {
+		try (BufferedWriter out = Utils.openWriter(output, false)) {
 			AtomicInteger count = new AtomicInteger();
 			try (DDTIterator iterator = new Parser().iterateDDT(ddt)) {
 				StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true)

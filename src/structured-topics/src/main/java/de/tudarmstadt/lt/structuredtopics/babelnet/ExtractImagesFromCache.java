@@ -73,7 +73,7 @@ public class ExtractImagesFromCache {
 		File[] files = apiCache.listFiles(new NoEdgesFilenameFilter());
 		int total = files.length;
 		int count = 0;
-		try (BufferedWriter out = Utils.openWriter(output)) {
+		try (BufferedWriter out = Utils.openWriter(output, false)) {
 			for (File f : files) {
 				if (count++ % 1000 == 0) {
 					LOG.info("Parsing file {}/{}", count, total);

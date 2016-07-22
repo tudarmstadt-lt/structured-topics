@@ -77,13 +77,14 @@ public class MapClustersToBabelnetSenses {
 	}
 
 	private static void writeDomainIndex(Map<String, Map<String, Double>> index, File outIndex) {
-		try (BufferedWriter out = Utils.openWriter(outIndex)) {
+		try (BufferedWriter out = Utils.openWriter(outIndex, false)) {
 			out.write("domain-name\tdomain-size\tdomain-words:weights\n");
 			for (Entry<String, Map<String, Double>> domain : index.entrySet()) {
 				String domainName = domain.getKey();
 				Map<String, Double> domainWords = domain.getValue();
-				List<String> words = domainWords.entrySet().stream().map(x -> x.getKey() + ":" + x.getValue())
-						.collect(Collectors.toList());
+				List<String> words = domainWords.entrySet().stream()
+						.sorted(/* highest value first */(a, b) -> Double.compare(b.getValue(), a.getValue()))
+						.map(x -> x.getKey() + ":" + x.getValue()).collect(Collectors.toList());
 				out.write(domainName + "\t" + words.size() + "\t" + StringUtils.join(words, ", ") + "\n");
 			}
 		} catch (Exception e) {
@@ -130,7 +131,7 @@ public class MapClustersToBabelnetSenses {
 	private static void scoreAndWriteClusters(File clusters, Map<String, Map<String, Double>> index, File outFile) {
 		DecimalFormat df = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 		df.setMaximumFractionDigits(340);
-		try (BufferedWriter out = Utils.openWriter(outFile)) {
+		try (BufferedWriter out = Utils.openWriter(outFile, false)) {
 			List<String> lines = readLines(clusters);
 			int size = lines.size();
 			AtomicInteger count = new AtomicInteger();

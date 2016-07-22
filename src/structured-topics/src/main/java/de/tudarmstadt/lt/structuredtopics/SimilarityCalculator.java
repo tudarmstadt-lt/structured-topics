@@ -61,7 +61,7 @@ public class SimilarityCalculator {
 
 	private void writeSimilarityForClusterWord(Map<String, Map<Integer, List<Feature>>> clusters, BufferedWriter out,
 			String senseName, Integer senseId, List<Feature> clusterWords1, String word, boolean debug)
-					throws IOException {
+			throws IOException {
 		Map<Integer, List<Feature>> possibleSensesForClusterWord = clusters.get(word);
 		if (possibleSensesForClusterWord == null) {
 			// false assumption, jo != bim. needs algorithm rework to compare

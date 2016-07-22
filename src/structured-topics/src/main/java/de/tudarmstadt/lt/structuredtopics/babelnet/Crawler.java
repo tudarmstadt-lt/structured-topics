@@ -2,7 +2,6 @@ package de.tudarmstadt.lt.structuredtopics.babelnet;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -115,7 +114,7 @@ public class Crawler {
 		Set<String> foundDomains = Sets.newHashSet();
 		int countFoundSenses = 0;
 		String currentSynsetId = null;
-		try (BufferedWriter out = new BufferedWriter(new FileWriter(outFile, true))) {
+		try (BufferedWriter out = Utils.openWriter(outFile, true)) {
 			while (!queue.isEmpty()) {
 				try {
 					Iterator<String> it = queue.iterator();
@@ -241,7 +240,7 @@ public class Crawler {
 			file.delete();
 			LOG.info("File exists, overwriting");
 		}
-		try (BufferedWriter out = new BufferedWriter(new FileWriter(file))) {
+		try (BufferedWriter out = Utils.openWriter(file, false)) {
 			for (String s : set) {
 				out.write(s + "\n");
 			}
